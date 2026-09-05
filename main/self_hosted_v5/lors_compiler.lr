@@ -1,0 +1,254 @@
+incorporate "self_compiler/llvm_tokens.inc"
+incorporate "self_compiler/llvm_ast.inc"
+incorporate "self_compiler/llvm_types.inc"
+incorporate "self_compiler/llvm_utils.inc"
+incorporate "self_compiler/llvm_lexer.inc"
+incorporate "self_compiler/llvm_parser.inc"
+incorporate "self_compiler/llvm_codegen.inc"
+incorporate "self_compiler/llvm_cleanup.inc"
+
+algorithm compile_single_file(input_file : series, flag_debug : state, flag_delete_on_error : state, flag_save_on_success : state, flag_object_output : state) -> void
+begin
+    datum len : whole = length(input_file);
+    verify (len > 3 and substring(input_file, len - 3, 3) == ".lr") then
+         datum dummy : whole = 0;
+    otherwise
+        verify (len > 4 and substring(input_file, len - 4, 4) == ".inc") then
+             datum base : series = substring(input_file, 0, len - 4);
+             datum lr_file : series = base + ".lr";
+
+             verify (file_exists(lr_file)) then
+                 reveal("Found corresponding .lr for " + input_file + ", compiling " + lr_file);
+                 compile_single_file(lr_file, flag_debug, flag_delete_on_error, flag_save_on_success, flag_object_output);
+                 result;
+             otherwise
+                 reveal("Generating wrapper for orphan " + input_file);
+                 datum wrapper_name : series = "wrapper_" + base + ".lr";
+                 file_write(wrapper_name, "incorporate \"" + input_file + "\"");
+
+                 compile_single_file(wrapper_name, flag_debug, flag_delete_on_error, flag_save_on_success, flag_object_output);
+
+                 verify (flag_object_output) then
+                     datum wrapper_o : series = "wrapper_" + base + ".o";
+                     datum target_o : series = base + ".o";
+                     verify (file_exists(wrapper_o)) then
+                         execute_system("mv " + wrapper_o + " " + target_o);
+                     conclude
+                 conclude
+
+                 file_remove(wrapper_name);
+                 result;
+             conclude
+        otherwise
+             reveal("Error: Input file must have .lr or .inc extension: " + input_file);
+             exit_program(1);
+        conclude
+    conclude
+
+    verify (is_safe_path(input_file) == false) then
+        reveal("Error: Invalid characters in filename: " + input_file);
+        exit_program(1);
+    conclude
+
+    verify (file_exists(input_file) == false) then
+        reveal("Error: File '" + input_file + "' not found");
+        exit_program(1);
+    conclude
+
+    reveal("Compiling to LLVM IR: " + input_file);
+
+    datum raw_code : series = file_read(input_file);
+    datum input_dir : series = get_dirname(input_file);
+    datum processed_code : series = preprocess_includes(raw_code, input_dir);
+
+    lexer_init(processed_code);
+    tokenize();
+
+    parser_init();
+    datum prog_node : whole = parse_program();
+
+    run_type_propagation(prog_node);
+
+    generate_code(prog_node);
+
+    datum base_name : series = substring(input_file, 0, len - 3);
+
+    // Change .cpp to .ll
+    datum ll_file : series = base_name + ".ll";
+
+    file_write(ll_file, codegen_output);
+
+    datum output_bin : series = base_name;
+    datum cmd : series = "";
+
+    verify (flag_object_output) then
+        output_bin = base_name + ".o";
+        // Compile .ll to object file
+        cmd = "clang -Wno-override-module -c " + ll_file + " -o " + output_bin;
+    otherwise
+        // Compile .ll to executable
+        cmd = "clang -Wno-override-module " + ll_file + " -lm -o " + output_bin;
+    conclude
+
+    datum error_log : series = base_name + ".log";
+    cmd = cmd + " > " + error_log + " 2>&1";
+
+    verify (file_exists(output_bin)) then
+         file_remove(output_bin);
+    conclude
+
+    execute_system(cmd);
+
+    verify (file_exists(output_bin)) then
+        verify (flag_save_on_success == false) then
+            file_remove(ll_file);
+        conclude
+        file_remove(error_log);
+    otherwise
+        verify (flag_debug) then
+            verify (file_exists(error_log)) then
+                datum err_content : series = file_read(error_log);
+                reveal(err_content);
+            conclude
+        otherwise
+            reveal("Error: Compilation failed for " + input_file + ". Use -debug to see details.");
+        conclude
+
+        file_remove(error_log);
+
+        verify (flag_delete_on_error) then
+            file_remove(ll_file);
+        conclude
+
+        exit_program(1);
+    conclude
+
+    garbage_collect();
+end
+
+algorithm genesis() -> whole
+begin
+    datum i : whole = 1;
+    datum input_file : series = "";
+    datum flag_debug : state = false;
+    datum flag_delete_on_error : state = false;
+    datum flag_save_on_success : state = false;
+    datum flag_object_output : state = false;
+
+    datum flag_oall : state = false;
+    datum flag_iall : state = false;
+    datum flag_ns_name : series = "";
+
+    cycle (i < arg_count()) do
+        datum arg : series = arg_value(i);
+        datum handled : state = false;
+
+        verify (arg == "-debug") then flag_debug = true; handled = true; conclude
+        verify (arg == "-d") then flag_delete_on_error = true; handled = true; conclude
+        verify (arg == "-s") then flag_save_on_success = true; handled = true; conclude
+        verify (arg == "-o") then flag_object_output = true; handled = true; conclude
+
+        verify (arg == "-oall") then flag_oall = true; handled = true; conclude
+        verify (arg == "-iall") then flag_iall = true; handled = true; conclude
+
+        verify (arg == "-ns") then
+            verify (i + 1 < arg_count()) then
+                flag_ns_name = arg_value(i + 1);
+                i = i + 1;
+                handled = true;
+            otherwise
+                reveal("Error: -ns requires a name");
+                exit_program(1);
+            conclude
+        conclude
+
+        verify (handled == false and starts_with(arg, "-")) then
+            reveal("Unknown flag: " + arg);
+            exit_program(1);
+        conclude
+
+        verify (handled == false) then
+            input_file = arg;
+        conclude
+
+        i = i + 1;
+    conclude
+
+    verify (flag_oall) then
+        reveal("Compiling all .lr and .inc files to LLVM IR...");
+        execute_system("ls *.lr *.inc > .files.list 2>/dev/null");
+
+        verify (file_exists(".files.list")) then
+            datum content : series = file_read(".files.list");
+            datum files : sequence<series> = split_lines(content);
+            datum k : whole = 0;
+
+            cycle (k < length(files)) do
+                datum f : series = files[k];
+                verify (length(f) > 0) then
+                     compile_single_file(f, flag_debug, flag_delete_on_error, flag_save_on_success, true);
+                conclude
+                k = k + 1;
+            conclude
+            file_remove(".files.list");
+        otherwise
+            reveal("Error: Could not list files");
+        conclude
+    conclude
+
+    verify (flag_iall) then
+        reveal("Linking all .o files...");
+        execute_system("ls *.o > .o_files.list 2>/dev/null");
+
+        verify (file_exists(".o_files.list")) then
+            datum content : series = file_read(".o_files.list");
+            datum files : sequence<series> = split_lines(content);
+            datum cmd : series = "clang ";
+            datum k : whole = 0;
+            datum has_files : state = false;
+
+            cycle (k < length(files)) do
+                datum f : series = files[k];
+                verify (length(f) > 0) then
+                    cmd = cmd + f + " ";
+                    has_files = true;
+                conclude
+                k = k + 1;
+            conclude
+
+            verify (has_files) then
+                datum out_name : series = "program";
+                verify (length(flag_ns_name) > 0) then
+                    out_name = flag_ns_name;
+                conclude
+
+                cmd = cmd + "-o " + out_name;
+                reveal("Executing: " + cmd);
+                execute_system(cmd);
+
+                verify (file_exists(out_name)) then
+                    reveal("Success: Created " + out_name);
+                otherwise
+                    reveal("Error: Linking failed");
+                    exit_program(1);
+                conclude
+            otherwise
+                reveal("Error: No .o files found to link");
+            conclude
+
+            file_remove(".o_files.list");
+        otherwise
+             reveal("Error: Could not list .o files");
+        conclude
+    conclude
+
+    verify (not flag_oall and not flag_iall) then
+        verify (length(input_file) == 0) then
+            reveal("Usage: self_compiler <script>.lr [-debug] [-d] [-s] [-o] | -oall | -iall [-ns <name>]");
+            exit_program(1);
+        conclude
+        compile_single_file(input_file, flag_debug, flag_delete_on_error, flag_save_on_success, flag_object_output);
+    conclude
+
+    result 0;
+end

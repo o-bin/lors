@@ -1,0 +1,15 @@
+// Include files one by one to find the syntax error
+incorporate "self_compiler/llvm_tokens.inc"
+incorporate "self_compiler/llvm_ast.inc"
+incorporate "self_compiler/llvm_types.inc"
+incorporate "self_compiler/llvm_utils.inc"
+incorporate "self_compiler/llvm_lexer.inc"
+incorporate "self_compiler/llvm_parser.inc"
+incorporate "self_compiler/llvm_codegen.inc"
+incorporate "self_compiler/llvm_cleanup.inc"
+
+algorithm genesis() -> whole
+begin
+    reveal("Check");
+    result 0;
+end

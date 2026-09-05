@@ -1,0 +1,143 @@
+# ==========================================================
+# Dedicated Makefile for Lors Stage 6 Modular Compiler (compiler_dev)
+# ==========================================================
+
+V6_DEV_COMPILER = ./compiler_dev
+
+.PHONY: all build test test-summary test-flags test-modular test-suite-v6dv test-all clean
+
+all: build test-all
+
+build: $(V6_DEV_COMPILER)
+
+$(V6_DEV_COMPILER):
+	@echo "=========================================="
+	@echo "Building All Stage 6 Modular Objects (.o)..."
+	@echo "=========================================="
+	@./build_all_modules.sh
+	@echo "=========================================="
+	@echo "Linking All Stage 6 Objects into compiler_dev..."
+	@echo "=========================================="
+	@./link_all_modules.sh
+
+test: build
+	@echo "=========================================="
+	@echo "Running All Tests with compiler_dev"
+	@echo "=========================================="
+	@failed=0; passed=0; \
+	for src in examples/*.lr tests/*.lr; do \
+		if [ -f "$$src" ]; then \
+			exe=$${src%.lr}; \
+			echo "------------------------------------------------------------"; \
+			echo "[FILE] $$src"; \
+			$(V6_DEV_COMPILER) $$src; \
+			if [ $$? -ne 0 ] || [ ! -f "$$exe" ]; then \
+				echo "[ERROR] Compilation failed for $$src"; \
+				failed=$$((failed + 1)); \
+				continue; \
+			fi; \
+			echo "[OUTPUT]"; \
+			if echo "$$exe" | grep -q "test_calculator"; then \
+				printf "1\n10\n20\n" | ./$$exe; \
+			elif echo "$$exe" | grep -q "test_string_input"; then \
+				printf "HelloInput\n" | ./$$exe; \
+			elif echo "$$exe" | grep -q "test_cli_args_basic"; then \
+				./$$exe arg1 arg2; \
+			elif echo "$$exe" | grep -q "test_cli_args_usage"; then \
+				./$$exe myargument; \
+			else \
+				./$$exe; \
+			fi; \
+			ret=$$?; \
+			if [ $$ret -ne 0 ]; then \
+				echo "[ERROR] Runtime exited with status code $$ret"; \
+				failed=$$((failed + 1)); \
+			else \
+				passed=$$((passed + 1)); \
+			fi; \
+			rm -f $$exe $$exe.o $$exe.ll; \
+		fi; \
+	done; \
+	echo "------------------------------------------------------------"; \
+	echo "=========================================="; \
+	echo "compiler_dev Test Complete: Total: $$((passed + failed)), Passed: $$passed, Failed: $$failed"; \
+	echo "=========================================="; \
+	if [ $$failed -ne 0 ]; then exit 1; fi
+
+test-flags: build
+	@echo "=========================================="
+	@echo "Running Flag Suite with compiler_dev..."
+	@echo "=========================================="
+	@$(V6_DEV_COMPILER) test_full_flags/simple.lr
+	@./test_full_flags/simple
+	@rm -f test_full_flags/simple test_full_flags/simple.ll test_full_flags/simple.o
+	@$(V6_DEV_COMPILER) -o test_full_flags/mod_a.lr
+	@$(V6_DEV_COMPILER) -o test_full_flags/mod_b.lr
+	@clang test_full_flags/mod_a.o test_full_flags/mod_b.o -lm -o test_full_flags/program
+	@./test_full_flags/program
+	@rm -f test_full_flags/mod_a.o test_full_flags/mod_b.o test_full_flags/program
+	@echo "Flags tests passed successfully!"
+
+test-modular: build
+	@echo "=========================================="
+	@echo "Running Modular Test with compiler_dev..."
+	@echo "=========================================="
+	$(V6_DEV_COMPILER) modular_test/app.lr
+	@./modular_test/app
+	@rm -f modular_test/app modular_test/app.o modular_test/app.ll
+	@echo "Modular test passed successfully!"
+
+test-suite-v6dv: build
+	@echo "=========================================="
+	@echo "Running test_suite_v6dv with compiler_dev"
+	@echo "=========================================="
+	@failed=0; passed=0; \
+	for src in test_suite_v6dv/*.lr; do \
+		if [ -f "$$src" ]; then \
+			exe=$${src%.lr}; \
+			echo "------------------------------------------------------------"; \
+			echo "[FILE] $$src"; \
+			$(V6_DEV_COMPILER) $$src; \
+			if [ $$? -ne 0 ] || [ ! -f "$$exe" ]; then \
+				echo "[ERROR] Compilation failed for $$src"; \
+				failed=$$((failed + 1)); \
+				continue; \
+			fi; \
+			echo "[OUTPUT]"; \
+			if echo "$$exe" | grep -q "test_calculator"; then \
+				printf "1\n10\n20\n" | ./$$exe; \
+			elif echo "$$exe" | grep -q "test_string_input"; then \
+				printf "HelloInput\n" | ./$$exe; \
+			elif echo "$$exe" | grep -q "test_cli_args_basic"; then \
+				./$$exe arg1 arg2; \
+			elif echo "$$exe" | grep -q "test_cli_args_usage"; then \
+				./$$exe myargument; \
+			else \
+				./$$exe; \
+			fi; \
+			ret=$$?; \
+			if [ $$ret -ne 0 ]; then \
+				echo "[ERROR] Runtime exited with status code $$ret"; \
+				failed=$$((failed + 1)); \
+			else \
+				passed=$$((passed + 1)); \
+			fi; \
+			rm -f $$exe $$exe.o $$exe.ll; \
+		fi; \
+	done; \
+	echo "------------------------------------------------------------"; \
+	echo "=========================================="; \
+	echo "test_suite_v6dv Complete: Total: $$((passed + failed)), Passed: $$passed, Failed: $$failed"; \
+	echo "=========================================="; \
+	if [ $$failed -ne 0 ]; then exit 1; fi
+
+test-all: test test-flags test-modular test-suite-v6dv
+
+clean:
+	rm -f $(V6_DEV_COMPILER) compiler_dev.o compiler_dev.ll *.o *.ll
+	rm -f build_modular_objs/*.o build_modular_objs/*.ll
+	rm -f examples/hello examples/calculation examples/logic
+	rm -f tests/test_*
+	rm -f test_full_flags/simple test_full_flags/*.o test_full_flags/*.ll test_full_flags/program test_full_flags/custom_app
+	rm -f modular_test/app modular_test/*.o modular_test/*.ll
+	rm -f test_suite_v6dv/test_* test_suite_v6dv/edge_cases

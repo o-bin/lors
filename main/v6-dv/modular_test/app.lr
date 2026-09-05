@@ -1,0 +1,74 @@
+// ==========================================
+// Modular Math Library - Demo Application
+// ==========================================
+
+incorporate "math_lib.inc"
+
+algorithm genesis() -> whole
+begin
+    reveal("==========================================");
+    reveal("Modular Math Library Demonstration");
+    reveal("==========================================");
+
+    // 1. 2D Vector Calculations
+    reveal("--- 2D Vector Operations ---");
+    datum v1 : Vector2D = vec2_create(3.0, 4.0);
+    datum v2 : Vector2D = vec2_create(1.0, 2.0);
+
+    datum v_sum : Vector2D = vec2_add(v1, v2);
+    reveal("v1 + v2 x:");
+    reveal(v_sum.x);
+    reveal("v1 + v2 y:");
+    reveal(v_sum.y);
+
+    datum v1_mag : precise = vec2_mag(v1);
+    reveal("Magnitude of v1 (expected 5.0):");
+    reveal(v1_mag);
+
+    datum d : precise = vec2_dist(v1, v2);
+    reveal("Distance between v1 and v2:");
+    reveal(d);
+
+    datum dot2 : precise = vec2_dot(v1, v2);
+    reveal("Dot product v1 . v2 (expected 11.0):");
+    reveal(dot2);
+
+    // 2. 3D Vector Calculations & Cross Product
+    reveal("--- 3D Vector Operations ---");
+    datum a : Vector3D = vec3_create(1.0, 0.0, 0.0);
+    datum b : Vector3D = vec3_create(0.0, 1.0, 0.0);
+
+    datum c : Vector3D = vec3_cross(a, b);
+    reveal("Cross product a x b (expected 0, 0, 1):");
+    reveal(c.x);
+    reveal(c.y);
+    reveal(c.z);
+
+    datum c_mag : precise = vec3_mag(c);
+    reveal("Magnitude of cross product (expected 1.0):");
+    reveal(c_mag);
+
+    // 3. Statistical Computations
+    reveal("--- Statistical Computations ---");
+    datum dataset : sequence<precise> = [10.0, 20.0, 30.0, 40.0, 50.0];
+    datum stats : StatsResult = stats_compute(dataset);
+
+    reveal("Dataset count (expected 5):");
+    reveal(stats.count);
+    reveal("Dataset Min (expected 10.0):");
+    reveal(stats.min_val);
+    reveal("Dataset Max (expected 50.0):");
+    reveal(stats.max_val);
+    reveal("Dataset Mean (expected 30.0):");
+    reveal(stats.mean);
+    reveal("Dataset Variance (expected 200.0):");
+    reveal(stats.variance);
+    reveal("Dataset Standard Deviation:");
+    reveal(stats.std_dev);
+
+    reveal("==========================================");
+    reveal("Modular Math Demo Finished Successfully!");
+    reveal("==========================================");
+
+    result 0;
+end

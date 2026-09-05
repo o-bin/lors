@@ -1,0 +1,88 @@
+{
+  "name": "Lors Pastel Theme",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#1E1E1E",
+    "editor.foreground": "#D4D4D4",
+    "activityBarBadge.background": "#FFD1DC",
+    "sideBarTitle.foreground": "#FFD1DC"
+  },
+  "tokenColors": [
+    {
+      "name": "Keywords (datum, verify, cycle, algorithm, etc.)",
+      "scope": [
+        "keyword.control.lors",
+        "keyword.declaration.lors"
+      ],
+      "settings": {
+        "foreground": "#FFD1DC",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Types and Built-ins (whole, precise, reveal, etc.)",
+      "scope": [
+        "entity.name.type.lors",
+        "support.function.builtin.lors"
+      ],
+      "settings": {
+        "foreground": "#FDFD96"
+      }
+    },
+    {
+      "name": "Strings",
+      "scope": [
+        "string.quoted.double.lors"
+      ],
+      "settings": {
+        "foreground": "#B5EAD7"
+      }
+    },
+    {
+      "name": "Numbers",
+      "scope": [
+        "constant.numeric.lors"
+      ],
+      "settings": {
+        "foreground": "#C7CEEA"
+      }
+    },
+    {
+      "name": "Booleans",
+      "scope": [
+        "constant.language.boolean.lors"
+      ],
+      "settings": {
+        "foreground": "#E2F0CB"
+      }
+    },
+    {
+      "name": "Comments",
+      "scope": [
+        "comment.line.double-slash.lors"
+      ],
+      "settings": {
+        "foreground": "#A1C181",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Variables",
+      "scope": [
+        "variable.other.lors"
+      ],
+      "settings": {
+        "foreground": "#FFDAC1"
+      }
+    },
+    {
+      "name": "Operators",
+      "scope": [
+        "keyword.operator.lors"
+      ],
+      "settings": {
+        "foreground": "#E0BBE4"
+      }
+    }
+  ]
+}

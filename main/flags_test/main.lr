@@ -1,0 +1,29 @@
+// Forward declarations
+algorithm add(a : whole, b : whole) -> whole;
+algorithm multiply(a : whole, b : whole) -> whole;
+algorithm power_of_two(n : whole) -> whole;
+
+algorithm genesis() -> whole
+begin
+    reveal("Testing Math Utils...");
+    datum x : whole = 10;
+    datum y : whole = 5;
+
+    datum sum : whole = add(x, y);
+    reveal("Sum: " + to_string(sum));
+
+    datum prod : whole = multiply(x, y);
+    reveal("Product: " + to_string(prod));
+
+    datum sq : whole = power_of_two(x);
+    reveal("Square: " + to_string(sq));
+
+    verify (sum == 15 and prod == 50 and sq == 100) then
+        reveal("Test Passed!");
+    otherwise
+        reveal("Test Failed!");
+        exit_program(1);
+    conclude
+
+    result 0;
+end

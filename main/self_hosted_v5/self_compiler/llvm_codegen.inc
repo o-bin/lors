@@ -1,0 +1,1698 @@
+// Code Generator State (LLVM IR)
+datum codegen_output : series = "";
+datum llvm_tmp_count : whole = 0;
+datum llvm_label_count : whole = 0;
+datum global_strings_output : series = "";
+datum string_count : whole = 0;
+datum current_func_name : series = "";
+
+// Forward declarations
+algorithm get_struct_field_index(s_name : series, f_name : series) -> whole;
+algorithm emit(line : series) -> void;
+algorithm emit_global(line : series) -> void;
+algorithm map_type_node(node_idx : whole) -> series;
+algorithm gen_expression(node_idx : whole) -> series;
+algorithm visit_stmt(node_idx : whole) -> void;
+algorithm visit_block(node_idx : whole) -> void;
+algorithm generate_code(prog_idx : whole) -> void;
+
+algorithm next_tmp() -> series
+begin
+    datum res : series = "%t" + to_string(llvm_tmp_count);
+    llvm_tmp_count = llvm_tmp_count + 1;
+    result res;
+end
+
+algorithm next_label() -> series
+begin
+    datum res : series = "L" + to_string(llvm_label_count);
+    llvm_label_count = llvm_label_count + 1;
+    result res;
+end
+
+algorithm emit(line : series) -> void
+begin
+    codegen_output = codegen_output + line + character(10);
+end
+
+algorithm emit_global(line : series) -> void
+begin
+    global_strings_output = global_strings_output + line + character(10);
+end
+
+algorithm map_type_node(node_idx : whole) -> series
+begin
+    datum name : series = node_heap[node_idx].text_val;
+    verify (name == "whole") then result "i64"; conclude
+    verify (name == "precise") then result "double"; conclude
+    verify (name == "series") then result "i8*"; conclude // Internal representation
+    verify (name == "state") then result "i1"; conclude
+    verify (name == "void") then result "void"; conclude
+    verify (name == "sequence") then
+        datum sub : series = map_type_node(node_heap[node_idx].subtype);
+        result sub + "*";
+    conclude
+    result "%struct." + name;
+end
+
+algorithm get_struct_field_index(s_name : series, f_name : series) -> whole
+begin
+    datum s_idx : whole = get_struct_idx(s_name);
+    verify (s_idx == -1) then
+        result -1;
+    conclude
+
+    // Check in struct_field_names where struct_field_parent == s_idx
+    datum i : whole = 0;
+    datum len : whole = length(struct_field_names);
+    datum match_idx : whole = 0;
+    cycle (i < len) do
+        verify (struct_field_parent[i] == s_idx) then
+            verify (struct_field_names[i] == f_name) then
+                result match_idx;
+            conclude
+            match_idx = match_idx + 1;
+        conclude
+        i = i + 1;
+    conclude
+    result -1;
+end
+
+// Converts an internal strong type to an LLVM emissible type (replacing pointers with 'ptr')
+algorithm emit_type(t : series) -> series
+begin
+    verify (t == "void") then result "void"; conclude
+    verify (substring(t, length(t) - 1, 1) == "*") then
+        result "ptr";
+    conclude
+    result t;
+end
+
+// Generate an expression using type information
+algorithm gen_expression(node_idx : whole) -> series
+begin
+    verify (node_idx == -1) then result "0"; conclude
+
+    datum node : ASTNode = node_heap[node_idx];
+    datum k : whole = node.kind;
+
+    verify (k == NODE_LITERAL) then
+        verify (node.value_type == "series") then
+            datum escaped : series = "";
+            datum blen : whole = 0;
+            datum slen : whole = length(node.text_val);
+            datum si : whole = 0;
+            cycle (si < slen) do
+                datum c : whole = char_at(node.text_val, si);
+                verify (c == 92) then // Backslash
+                    datum next : whole = 0;
+                    verify (si + 1 < slen) then next = char_at(node.text_val, si + 1); conclude
+                    
+                    datum h_esc : state = false;
+                    verify (not h_esc and next == 110) then escaped = escaped + "\\0A"; blen = blen + 1; si = si + 1; h_esc = true; conclude
+                    verify (not h_esc and next == 116) then escaped = escaped + "\\09"; blen = blen + 1; si = si + 1; h_esc = true; conclude
+                    verify (not h_esc and next == 114) then escaped = escaped + "\\0D"; blen = blen + 1; si = si + 1; h_esc = true; conclude
+                    verify (not h_esc and next == 34) then escaped = escaped + "\\22"; blen = blen + 1; si = si + 1; h_esc = true; conclude
+                    verify (not h_esc and next == 92) then escaped = escaped + "\\5C"; blen = blen + 1; si = si + 1; h_esc = true; conclude
+                    
+                    verify (not h_esc) then
+                         escaped = escaped + "\\5C";
+                         blen = blen + 1;
+                    conclude
+                otherwise
+                    datum h_chr : state = false;
+                    verify (not h_chr and c == 10) then
+                        escaped = escaped + "\\0A";
+                        blen = blen + 1;
+                        h_chr = true;
+                    conclude
+                    verify (not h_chr and c == 34) then
+                        escaped = escaped + "\\22";
+                        blen = blen + 1;
+                        h_chr = true;
+                    conclude
+                    verify (not h_chr) then
+                        escaped = escaped + character(c);
+                        blen = blen + 1;
+                    conclude
+                conclude
+                si = si + 1;
+            conclude
+
+            datum final_len : whole = blen + 1;
+            datum str_name : series = "@.str." + to_string(string_count);
+            string_count = string_count + 1;
+            
+            emit_global(str_name + " = linkonce_odr unnamed_addr constant [" + to_string(final_len) + " x i8] c\"" + escaped + "\\00\", align 1");
+
+            datum tmp : series = next_tmp();
+            emit("    " + tmp + " = getelementptr inbounds [" + to_string(final_len) + " x i8], [" + to_string(final_len) + " x i8]* " + str_name + ", i64 0, i64 0");
+            result tmp;
+        conclude
+        verify (node.value_type == "state") then
+            verify (node.bool_val) then result "1"; otherwise result "0"; conclude
+        conclude
+        verify (node.value_type == "precise") then
+            // LLVM requires floating-point literals to have decimal point or scientific notation
+            // but `node.text_val` comes from `node_heap`, so we format it exactly.
+            datum v : series = node.text_val;
+            // Hacky check for missing decimal since parser might yield "1.0" as "1.0" or "1" depending on precision.
+            // Using character checking since index_of might not be defined in stable compiler
+            datum has_dot : state = false;
+            datum v_len : whole = length(v);
+            datum vi : whole = 0;
+            cycle (vi < v_len) do
+                 datum ch : series = substring(v, vi, 1);
+                 datum is_float_char : state = false;
+                 verify (ch == ".") then is_float_char = true; conclude
+                 verify (ch == "e") then is_float_char = true; conclude
+                 verify (is_float_char) then has_dot = true; conclude
+                 vi = vi + 1;
+            conclude
+            verify (has_dot == false) then v = v + ".0"; conclude
+            result v;
+        conclude
+        result node.text_val;
+    conclude
+    verify (k == 27) then // NODE_INQUIRE
+        datum r_t : series = node_heap[node_idx].resolved_type;
+        datum is_e : state = (r_t == "");
+        verify (is_e) then
+            r_t = "i64";
+        conclude
+
+        datum tmp : series = next_tmp();
+        
+        datum is_str : state = (r_t == "i8*");
+        verify (is_str) then
+            // For strings, malloc a buffer
+            emit("    " + tmp + " = call i8* @malloc(i64 256)");
+            emit("    call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.scanf_str, i64 0, i64 0), i8* " + tmp + ")");
+            result tmp;
+        conclude
+
+        datum ptr_t : series = next_tmp();
+        // 1. Emit ALLOCA safely
+        datum s_al : series = "    ";
+        s_al = s_al + ptr_t;
+        s_al = s_al + " = alloca ";
+        s_al = s_al + r_t;
+        emit(s_al);
+
+        // 2. Emit SCANF safely
+        datum s_sc : series = "";
+        
+        datum is_i64 : state = (r_t == "i64");
+        verify (is_i64) then
+            s_sc = "    call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.scanf_i64, i64 0, i64 0), i64* ";
+            s_sc = s_sc + ptr_t;
+            s_sc = s_sc + ")";
+            emit(s_sc);
+        conclude
+
+        datum is_dbl : state = (r_t == "double");
+        verify (is_dbl) then
+            s_sc = "    call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.scanf_f64, i64 0, i64 0), double* ";
+            s_sc = s_sc + ptr_t;
+            s_sc = s_sc + ")";
+            emit(s_sc);
+        conclude
+
+        // 3. Emit LOAD safely
+        datum s_ld : series = "    ";
+        s_ld = s_ld + tmp;
+        s_ld = s_ld + " = load ";
+        s_ld = s_ld + r_t;
+        s_ld = s_ld + ", ";
+        s_ld = s_ld + r_t;
+        s_ld = s_ld + "* ";
+        s_ld = s_ld + ptr_t;
+        emit(s_ld);
+
+        result tmp;
+    conclude
+
+
+    verify (k == NODE_IDENTIFIER) then
+        datum tmp : series = next_tmp();
+        datum var_type : series = get_expr_type(node_idx);
+        datum scope : whole = get_symbol_scope(node.text_val);
+        datum prefix : series = "%";
+        verify (scope == 0) then prefix = "@"; conclude
+        emit("    " + tmp + " = load " + var_type + ", " + var_type + "* " + prefix + node.text_val);
+        result tmp;
+    conclude
+
+    verify (k == NODE_BINARY_OP) then
+        datum op : series = node.op;
+        datum left : series = gen_expression(node.left);
+        datum right : series = gen_expression(node.right);
+        datum l_type : series = get_expr_type(node.left);
+        datum r_type : series = get_expr_type(node.right);
+        datum tmp : series = next_tmp();
+
+        verify (l_type == "void") then
+            l_type = r_type;
+            verify (r_type == "double") then
+                left = "0.000000e+00";
+            conclude
+        conclude
+
+        // Handling implicit type casting
+        datum is_l_i64 : state = (l_type == "i64");
+        datum is_r_dbl : state = (r_type == "double");
+        verify (is_l_i64 and is_r_dbl) then
+            datum cast_l : series = next_tmp();
+            datum c_emit_l : series = "    ";
+            c_emit_l = c_emit_l + cast_l;
+            c_emit_l = c_emit_l + " = sitofp i64 ";
+            c_emit_l = c_emit_l + left;
+            c_emit_l = c_emit_l + " to double";
+            emit(c_emit_l);
+            left = cast_l;
+            l_type = "double";
+        conclude
+
+        datum is_l_dbl : state = (l_type == "double");
+        datum is_r_i64 : state = (r_type == "i64");
+        verify (is_l_dbl and is_r_i64) then
+            datum cast_r : series = next_tmp();
+            datum c_emit_r : series = "    ";
+            c_emit_r = c_emit_r + cast_r;
+            c_emit_r = c_emit_r + " = sitofp i64 ";
+            c_emit_r = c_emit_r + right;
+            c_emit_r = c_emit_r + " to double";
+            emit(c_emit_r);
+            right = cast_r;
+            r_type = "double";
+        conclude
+
+        // Math operations
+        verify (l_type == "double") then
+            verify (op == "+") then emit("    " + tmp + " = fadd double " + left + ", " + right); conclude
+            verify (op == "-") then emit("    " + tmp + " = fsub double " + left + ", " + right); conclude
+            verify (op == "*") then emit("    " + tmp + " = fmul double " + left + ", " + right); conclude
+            verify (op == "/") then emit("    " + tmp + " = fdiv double " + left + ", " + right); conclude
+
+            verify (op == ">") then emit("    " + tmp + " = fcmp ogt double " + left + ", " + right); conclude
+            verify (op == "<") then emit("    " + tmp + " = fcmp olt double " + left + ", " + right); conclude
+            verify (op == ">=") then emit("    " + tmp + " = fcmp oge double " + left + ", " + right); conclude
+            verify (op == "<=") then emit("    " + tmp + " = fcmp ole double " + left + ", " + right); conclude
+            verify (op == "==") then emit("    " + tmp + " = fcmp oeq double " + left + ", " + right); conclude
+            verify (op == "!=") then emit("    " + tmp + " = fcmp one double " + left + ", " + right); conclude
+        conclude
+
+        datum l_len : whole = length(l_type);
+        datum l_last : series = substring(l_type, l_len - 1, 1);
+        datum is_ptr : state = (l_last == "*");
+        verify (is_ptr) then
+            // String concat logic: use external string concat func
+            datum is_str_c : state = (op == "+");
+            verify (is_str_c) then
+                emit("    " + tmp + " = call i8* @__str_concat(i8* " + left + ", i8* " + right + ")");
+            conclude
+            
+            datum is_eq_c : state = (op == "==");
+            verify (is_eq_c) then
+                // strcmp
+                datum cmp_tmp : series = next_tmp();
+                emit("    " + cmp_tmp + " = call i32 @strcmp(i8* " + left + ", i8* " + right + ")");
+                emit("    " + tmp + " = icmp eq i32 " + cmp_tmp + ", 0");
+            conclude
+            
+            datum is_ne_c : state = (op == "!=");
+            verify (is_ne_c) then
+                // strcmp
+                datum cmp_tmp : series = next_tmp();
+                emit("    " + cmp_tmp + " = call i32 @strcmp(i8* " + left + ", i8* " + right + ")");
+                emit("    " + tmp + " = icmp ne i32 " + cmp_tmp + ", 0");
+            conclude
+        conclude
+
+        datum is_int_op : state = false;
+        datum not_dbl : state = (l_type != "double");
+        verify (not_dbl) then
+            datum l_len2 : whole = length(l_type);
+            datum l_last2 : series = substring(l_type, l_len2 - 1, 1);
+            datum not_ptr : state = (l_last2 != "*");
+            verify (not_ptr) then
+                is_int_op = true;
+            conclude
+        conclude
+
+        verify (is_int_op) then
+            // Assume i64 or i1
+            verify (op == "+") then emit("    " + tmp + " = add i64 " + left + ", " + right); conclude
+            verify (op == "-") then emit("    " + tmp + " = sub i64 " + left + ", " + right); conclude
+            verify (op == "*") then emit("    " + tmp + " = mul i64 " + left + ", " + right); conclude
+            verify (op == "/") then emit("    " + tmp + " = sdiv i64 " + left + ", " + right); conclude
+            verify (op == "%") then emit("    " + tmp + " = srem i64 " + left + ", " + right); conclude
+
+            verify (op == "and") then emit("    " + tmp + " = and i1 " + left + ", " + right); conclude
+            verify (op == "or") then emit("    " + tmp + " = or i1 " + left + ", " + right); conclude
+            verify (op == "not") then emit("    " + tmp + " = xor i1 " + right + ", 1"); conclude
+
+            verify (op == ">") then emit("    " + tmp + " = icmp sgt i64 " + left + ", " + right); conclude
+            verify (op == "<") then emit("    " + tmp + " = icmp slt i64 " + left + ", " + right); conclude
+            verify (op == ">=") then emit("    " + tmp + " = icmp sge i64 " + left + ", " + right); conclude
+            verify (op == "<=") then emit("    " + tmp + " = icmp sle i64 " + left + ", " + right); conclude
+
+            datum is_cmp_eq : state = (op == "==");
+            verify (is_cmp_eq) then
+                verify (l_type == "i1") then
+                    emit("    " + tmp + " = icmp eq i1 " + left + ", " + right);
+                otherwise
+                    emit("    " + tmp + " = icmp eq i64 " + left + ", " + right);
+                conclude
+            conclude
+
+            datum is_cmp_ne : state = (op == "!=");
+            verify (is_cmp_ne) then
+                verify (l_type == "i1") then
+                    emit("    " + tmp + " = icmp ne i1 " + left + ", " + right);
+                otherwise
+                    emit("    " + tmp + " = icmp ne i64 " + left + ", " + right);
+                conclude
+            conclude
+        conclude
+
+        result tmp;
+    conclude
+
+    verify (k == NODE_FUNC_CALL) then
+        datum fname : series = node.text_val;
+        datum args : sequence<whole> = node.children;
+
+        verify (fname == "reveal") then
+            datum len : whole = length(args);
+            verify (len == 0) then
+                emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str.newline, i64 0, i64 0))");
+            otherwise
+                datum arg_val : series = gen_expression(args[0]);
+                datum arg_type : series = get_expr_type(args[0]);
+
+                datum t_len : whole = length(arg_type);
+                datum t_last : series = substring(arg_type, t_len - 1, 1);
+                datum is_ptr_a : state = (t_last == "*");
+                verify (is_ptr_a) then
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.fmt_str, i64 0, i64 0), i8* " + arg_val + ")");
+                conclude
+                datum is_dbl_a : state = (arg_type == "double");
+                verify (is_dbl_a) then
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.fmt_f64, i64 0, i64 0), double " + arg_val + ")");
+                conclude
+                datum is_i64_a : state = (arg_type == "i64");
+                verify (is_i64_a) then
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @.str.fmt_i64, i64 0, i64 0), i64 " + arg_val + ")");
+                conclude
+                datum is_i1_a : state = (arg_type == "i1");
+                verify (is_i1_a) then
+                    datum e_val : series = next_tmp();
+                    emit("    " + e_val + " = zext i1 " + arg_val + " to i64");
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @.str.fmt_i64, i64 0, i64 0), i64 " + e_val + ")");
+                conclude
+            conclude
+            result "0";
+        conclude
+
+        // Intrinsic mapping
+        verify (fname == "is_lower") then
+            fname = "__is_lower_whole";
+        conclude
+        verify (fname == "is_upper") then
+            fname = "__is_upper_whole";
+        conclude
+        verify (fname == "is_alpha") then
+            fname = "__is_alpha_whole";
+        conclude
+        verify (fname == "is_space") then
+            fname = "__is_space_whole";
+        conclude
+        verify (fname == "power") then fname = "pow"; conclude
+        verify (fname == "absolute") then fname = "abs"; conclude
+        verify (fname == "root") then fname = "sqrt"; conclude
+        verify (fname == "sine") then fname = "sin"; conclude
+        verify (fname == "cosine") then fname = "cos"; conclude
+        verify (fname == "tangent") then fname = "tan"; conclude
+        verify (fname == "to_upper") then fname = "__to_upper"; conclude
+        verify (fname == "to_lower") then fname = "__to_lower"; conclude
+        verify (fname == "is_alnum") then fname = "__is_alnum_whole"; conclude
+        verify (fname == "append") then fname = "__append"; conclude
+        verify (fname == "is_digit") then fname = "__is_digit_whole"; conclude
+        verify (fname == "to_precise") then fname = "atof"; conclude
+        verify (fname == "to_float") then fname = "atof"; conclude
+        verify (fname == "to_integer") then fname = "atoll"; conclude
+        verify (fname == "index_of") then fname = "__index_of"; conclude
+        verify (fname == "substring") then fname = "__substring"; conclude
+        verify (fname == "reverse") then fname = "__reverse"; conclude
+        verify (fname == "to_string") then
+            datum arg_type : series = get_expr_type(args[0]);
+            verify (arg_type == "double") then fname = "__to_string_precise"; conclude
+            datum is_int_type : state = false;
+            verify (arg_type == "i64") then is_int_type = true; conclude
+            verify (arg_type == "i1") then is_int_type = true; conclude
+            verify (is_int_type) then fname = "__to_string_whole"; conclude
+        conclude
+        verify (fname == "file_write") then fname = "__file_write"; conclude
+        verify (fname == "file_read") then fname = "__file_read"; conclude
+        verify (fname == "file_remove") then fname = "remove"; conclude
+        verify (fname == "env_get") then fname = "__env_get"; conclude
+        verify (fname == "length") then fname = "__length"; conclude
+        verify (fname == "char_at") then fname = "__char_at"; conclude
+
+        datum ret_type : series = get_expr_type(node_idx);
+        datum tmp : series = next_tmp();
+
+        // Check if this is a struct constructor (name matches a struct and ret_type is struct)
+        datum is_struct_ctor : state = false;
+        verify (substring(ret_type, 0, 8) == "%struct.") then
+             datum s_name : series = substring(ret_type, 8, length(ret_type) - 8);
+             verify (s_name == fname) then
+                 is_struct_ctor = true;
+             conclude
+        conclude
+
+        datum arg_len : whole = length(args);
+
+        verify (is_struct_ctor) then
+             // Allocate struct, populate it, return loaded struct
+             datum ptr : series = next_tmp();
+             datum em_al : series = "    ";
+             em_al = em_al + ptr;
+             em_al = em_al + " = alloca ";
+             em_al = em_al + ret_type;
+             emit(em_al);
+
+             datum j : whole = 0;
+             cycle (j < arg_len) do
+                  datum arg_type2 : series = get_expr_type(args[j]);
+                  datum arg_val2 : series = gen_expression(args[j]);
+
+                  datum gep_tmp : series = next_tmp();
+                  datum em_gep : series = "    ";
+                  em_gep = em_gep + gep_tmp;
+                  em_gep = em_gep + " = getelementptr inbounds ";
+                  em_gep = em_gep + ret_type;
+                  em_gep = em_gep + ", ";
+                  em_gep = em_gep + ret_type;
+                  em_gep = em_gep + "* ";
+                  em_gep = em_gep + ptr;
+                  em_gep = em_gep + ", i32 0, i32 ";
+                  em_gep = em_gep + to_string(j);
+                  emit(em_gep);
+
+                  datum em_st : series = "    store ";
+                  em_st = em_st + arg_type2;
+                  em_st = em_st + " ";
+                  em_st = em_st + arg_val2;
+                  em_st = em_st + ", ";
+                  em_st = em_st + arg_type2;
+                  em_st = em_st + "* ";
+                  em_st = em_st + gep_tmp;
+                  emit(em_st);
+                  j = j + 1;
+             conclude
+
+             datum em_ld : series = "    ";
+             em_ld = em_ld + tmp;
+             em_ld = em_ld + " = load ";
+             em_ld = em_ld + ret_type;
+             em_ld = em_ld + ", ";
+             em_ld = em_ld + ret_type;
+             em_ld = em_ld + "* ";
+             em_ld = em_ld + ptr;
+             emit(em_ld);
+             result tmp;
+        otherwise
+            datum args_str : series = "";
+            datum i : whole = 0;
+            cycle (i < arg_len) do
+                verify (i > 0) then args_str = args_str + ", "; conclude
+                datum arg_type : series = get_expr_type(args[i]);
+                args_str = args_str + arg_type + " " + gen_expression(args[i]);
+                i = i + 1;
+            conclude
+
+            verify (ret_type == "void") then
+                emit("    call void @" + fname + "(" + args_str + ")");
+                result "0";
+            otherwise
+                emit("    " + tmp + " = call " + ret_type + " @" + fname + "(" + args_str + ")");
+                result tmp;
+            conclude
+        conclude
+    conclude
+
+    verify (k == NODE_ARRAY_LITERAL) then
+        datum els : sequence<whole> = node.children;
+        datum len : whole = length(els);
+        datum elem_type : series = "i64";
+        verify (len > 0) then
+            elem_type = get_expr_type(els[0]);
+        conclude
+        
+        datum sz : whole = len * 8; // Assumes 64-bit platform
+        datum mem : series = next_tmp();
+        emit("    " + mem + " = call i8* @malloc(i64 " + to_string(sz) + ")");
+        
+        datum cast_ptr : series = next_tmp();
+        emit("    " + cast_ptr + " = bitcast i8* " + mem + " to " + elem_type + "*");
+        
+        datum j : whole = 0;
+        cycle (j < len) do
+            datum val : series = gen_expression(els[j]);
+            datum gep_tmp : series = next_tmp();
+            emit("    " + gep_tmp + " = getelementptr inbounds " + elem_type + ", " + elem_type + "* " + cast_ptr + ", i64 " + to_string(j));
+            emit("    store " + elem_type + " " + val + ", " + elem_type + "* " + gep_tmp);
+            j = j + 1;
+        conclude
+        
+        result cast_ptr;
+    conclude
+
+    verify (k == NODE_ARRAY_ACCESS) then
+        datum index : series = gen_expression(node.condition);
+        datum elem_type : series = get_expr_type(node_idx);
+        datum arr_t : series = get_symbol_type(node.text_val);
+        
+        datum loaded_arr : series = next_tmp();
+        emit("    " + loaded_arr + " = load " + arr_t + ", " + arr_t + "* %" + node.text_val);
+        
+        datum gep_tmp : series = next_tmp();
+        emit("    " + gep_tmp + " = getelementptr inbounds " + elem_type + ", " + arr_t + " " + loaded_arr + ", i64 " + index);
+        
+        datum val_tmp : series = next_tmp();
+        emit("    " + val_tmp + " = load " + elem_type + ", " + elem_type + "* " + gep_tmp);
+        result val_tmp;
+    conclude
+
+    verify (k == NODE_MEMBER_ACCESS) then
+        datum base_t : series = get_expr_type(node.left);
+        // Ensure struct type has %struct. prefix
+        datum s_name : series = base_t;
+        verify (substring(base_t, 0, 8) == "%struct.") then
+            s_name = substring(base_t, 8, length(base_t) - 8);
+        conclude
+
+        datum f_idx : whole = get_struct_field_index(s_name, node.text_val);
+        datum elem_type : series = get_expr_type(node_idx);
+
+        // Gen base expr (which returns the pointer to the struct... wait!
+        // Structs are allocated via alloca, gen_expression on a local variable returns its loaded value...
+        // But for MEMBER_ACCESS, we need the POINTER to the struct.
+        // Wait, gen_expression on an identifier DOES load it:
+        // emit("    " + tmp + " = load " + var_type + ", " + var_type + "* %" + node.text_val);
+        // Let's modify our logic: gen_expression on identifier loads the value.
+        // Actually, in C, variables of struct type are pointers. Is `var_type` just `%struct.Name` or `%struct.Name*`?
+        // Let's check `NODE_VAR_DECL`: `emit("    %" + node.text_val + " = alloca " + var_type);`
+        // So `%name` is `%struct.Name*`.
+        // If `gen_expression` processes the left side (NODE_IDENTIFIER), it emits:
+        // `emit("    " + tmp + " = load " + var_type + ", " + var_type + "* %" + node.text_val);`
+        // Wait! `load %struct.Name` loads the ENTIRE struct by value into a register!
+        // `getelementptr` on a loaded struct value is NOT valid, or it requires `extractvalue`.
+        // Usually we `getelementptr` on the POINTER.
+        // Let's avoid gen_expression for the left side if it's an identifier, OR we handle pointers.
+        // Since Lors doesn't have address-of operator, maybe we should just pass the variable name?
+        // Wait, if node.left is NODE_IDENTIFIER, we can just use `%name`.
+
+        datum obj_ptr : series = "";
+        datum left_node : ASTNode = node_heap[node.left];
+        datum is_ident : state = (left_node.kind == NODE_IDENTIFIER);
+        verify (is_ident) then
+             obj_ptr = "%" + left_node.text_val;
+        conclude
+
+        datum is_arr : state = (left_node.kind == NODE_ARRAY_ACCESS);
+        verify (is_arr) then
+             datum arr_index : series = gen_expression(left_node.condition);
+             datum arr_t : series = get_symbol_type(left_node.text_val);
+             datum loaded_arr : series = next_tmp();
+             datum em_ld : series = "    ";
+             em_ld = em_ld + loaded_arr;
+             em_ld = em_ld + " = load ";
+             em_ld = em_ld + arr_t;
+             em_ld = em_ld + ", ";
+             em_ld = em_ld + arr_t;
+             em_ld = em_ld + "* %";
+             em_ld = em_ld + left_node.text_val;
+             emit(em_ld);
+
+             datum gep_tmp_arr : series = next_tmp();
+             datum em_gep_arr : series = "    ";
+             em_gep_arr = em_gep_arr + gep_tmp_arr;
+             em_gep_arr = em_gep_arr + " = getelementptr inbounds ";
+             em_gep_arr = em_gep_arr + base_t;
+             em_gep_arr = em_gep_arr + ", ";
+             em_gep_arr = em_gep_arr + arr_t;
+             em_gep_arr = em_gep_arr + " ";
+             em_gep_arr = em_gep_arr + loaded_arr;
+             em_gep_arr = em_gep_arr + ", i64 ";
+             em_gep_arr = em_gep_arr + arr_index;
+             emit(em_gep_arr);
+             obj_ptr = gep_tmp_arr;
+        conclude
+
+        datum is_mem : state = (left_node.kind == NODE_MEMBER_ACCESS);
+        verify (is_mem) then
+             datum left_left_node : ASTNode = node_heap[left_node.left];
+             verify (left_left_node.kind == NODE_IDENTIFIER) then
+                  datum ll_ptr : series = "%" + left_left_node.text_val;
+                  datum ll_t : series = get_expr_type(left_node.left);
+                  datum ll_s_name : series = substring(ll_t, 8, length(ll_t) - 8);
+                  datum l_f_idx : whole = get_struct_field_index(ll_s_name, left_node.text_val);
+
+                  datum l_gep_tmp : series = next_tmp();
+                  datum em_gep_mem : series = "    ";
+                  em_gep_mem = em_gep_mem + l_gep_tmp;
+                  em_gep_mem = em_gep_mem + " = getelementptr inbounds ";
+                  em_gep_mem = em_gep_mem + ll_t;
+                  em_gep_mem = em_gep_mem + ", ";
+                  em_gep_mem = em_gep_mem + ll_t;
+                  em_gep_mem = em_gep_mem + "* ";
+                  em_gep_mem = em_gep_mem + ll_ptr;
+                  em_gep_mem = em_gep_mem + ", i32 0, i32 ";
+                  em_gep_mem = em_gep_mem + to_string(l_f_idx);
+                  emit(em_gep_mem);
+                  obj_ptr = l_gep_tmp;
+             otherwise
+                  reveal("Error: Unhandled deeper nested member access");
+                  exit_program(1);
+             conclude
+        conclude
+
+        datum unhandled : state = (is_ident == false and is_arr == false and is_mem == false);
+        verify (unhandled) then
+             reveal("Error: Unhandled left side of member access");
+             exit_program(1);
+        conclude
+
+        datum gep_tmp : series = next_tmp();
+        datum gep_emit : series = "    ";
+        gep_emit = gep_emit + gep_tmp;
+        gep_emit = gep_emit + " = getelementptr inbounds ";
+        gep_emit = gep_emit + base_t;
+        gep_emit = gep_emit + ", ";
+        gep_emit = gep_emit + base_t;
+        gep_emit = gep_emit + "* ";
+        gep_emit = gep_emit + obj_ptr;
+        gep_emit = gep_emit + ", i32 0, i32 ";
+        gep_emit = gep_emit + to_string(f_idx);
+        emit(gep_emit);
+
+        datum val_tmp : series = next_tmp();
+        datum ld_emit : series = "    ";
+        ld_emit = ld_emit + val_tmp;
+        ld_emit = ld_emit + " = load ";
+        ld_emit = ld_emit + elem_type;
+        ld_emit = ld_emit + ", ";
+        ld_emit = ld_emit + elem_type;
+        ld_emit = ld_emit + "* ";
+        ld_emit = ld_emit + gep_tmp;
+        emit(ld_emit);
+
+        result val_tmp;
+    conclude
+
+    verify (k == NODE_BLOCK) then
+        visit_block(node_idx);
+    conclude
+    
+    result "0";
+end
+
+algorithm visit_stmt(node_idx : whole) -> void
+begin
+    datum node : ASTNode = node_heap[node_idx];
+    datum k : whole = node.kind;
+
+    verify (k == NODE_VAR_DECL) then
+        datum var_type : series = map_type_node(node.type_node);
+        add_symbol(node.text_val, var_type);
+        emit("    %" + node.text_val + " = alloca " + var_type);
+
+        datum v_len : whole = length(var_type);
+        datum v_last : series = substring(var_type, v_len - 1, 1);
+        datum is_v_ptr : state = (v_last == "*");
+        verify (is_v_ptr) then
+            datum s_emit : series = "    store ";
+            s_emit = s_emit + var_type;
+            s_emit = s_emit + " null, ";
+            s_emit = s_emit + var_type;
+            s_emit = s_emit + "* %";
+            s_emit = s_emit + node.text_val;
+            emit(s_emit);
+        conclude
+        
+        verify (node.initializer != -1) then
+            datum val : series = gen_expression(node.initializer);
+            datum val_type : series = get_expr_type(node.initializer);
+            
+            // Implicit casting for literal declarations
+            verify (var_type == "double" and val_type == "i64") then
+                datum cast_tmp : series = next_tmp();
+                emit("    " + cast_tmp + " = sitofp i64 " + val + " to double");
+                val = cast_tmp;
+            conclude
+            verify (var_type == "i64" and val_type == "double") then
+                datum cast_tmp : series = next_tmp();
+                emit("    " + cast_tmp + " = fptosi double " + val + " to i64");
+                val = cast_tmp;
+            conclude
+
+            emit("    store " + var_type + " " + val + ", " + var_type + "* %" + node.text_val);
+        conclude
+    conclude
+
+    verify (k == NODE_ASSIGN) then
+        datum var_name : series = node.text_val;
+        datum var_type : series = get_symbol_type(var_name);
+        datum val : series = gen_expression(node.initializer);
+        datum val_type : series = get_expr_type(node.initializer);
+
+        // Check if we need implicit cast (e.g. i64 to double)
+        datum is_dbl_t : state = (var_type == "double");
+        datum is_i64_v : state = (val_type == "i64");
+        verify (is_dbl_t and is_i64_v) then
+             datum cast_tmp : series = next_tmp();
+             datum c_emit : series = "    ";
+             c_emit = c_emit + cast_tmp;
+             c_emit = c_emit + " = sitofp i64 ";
+             c_emit = c_emit + val;
+             c_emit = c_emit + " to double";
+             emit(c_emit);
+             val = cast_tmp;
+        conclude
+
+        datum is_i64_t : state = (var_type == "i64");
+        datum is_dbl_v : state = (val_type == "double");
+        verify (is_i64_t and is_dbl_v) then
+             datum cast_tmp : series = next_tmp();
+             datum c_emit : series = "    ";
+             c_emit = c_emit + cast_tmp;
+             c_emit = c_emit + " = fptosi double ";
+             c_emit = c_emit + val;
+             c_emit = c_emit + " to i64";
+             emit(c_emit);
+             val = cast_tmp;
+        conclude
+
+        datum scope : whole = get_symbol_scope(var_name);
+        datum prefix : series = "%";
+        verify (scope == 0) then prefix = "@"; conclude
+
+        datum s_emit : series = "    store ";
+        s_emit = s_emit + var_type;
+        s_emit = s_emit + " ";
+        s_emit = s_emit + val;
+        s_emit = s_emit + ", ";
+        s_emit = s_emit + var_type;
+        s_emit = s_emit + "* ";
+        s_emit = s_emit + prefix;
+        s_emit = s_emit + var_name;
+        emit(s_emit);
+    conclude
+
+    verify (k == NODE_ARRAY_ASSIGN) then
+        datum arr_n : series = node.text_val;
+        datum arr_t : series = get_symbol_type(arr_n);
+        datum elem_type : series = substring(arr_t, 0, length(arr_t) - 1);
+        
+        datum index : series = gen_expression(node.condition);
+        datum v_init : series = gen_expression(node.initializer);
+        
+        datum l_arr : series = next_tmp();
+        datum l_emit : series = "    ";
+        l_emit = l_emit + l_arr;
+        l_emit = l_emit + " = load ";
+        l_emit = l_emit + arr_t;
+        l_emit = l_emit + ", ";
+        l_emit = l_emit + arr_t;
+        l_emit = l_emit + "* %";
+        l_emit = l_emit + arr_n;
+        emit(l_emit);
+        
+        datum g_tmp : series = next_tmp();
+        datum g_emit : series = "    ";
+        g_emit = g_emit + g_tmp;
+        g_emit = g_emit + " = getelementptr inbounds ";
+        g_emit = g_emit + elem_type;
+        g_emit = g_emit + ", ";
+        g_emit = g_emit + arr_t;
+        g_emit = g_emit + " ";
+        g_emit = g_emit + l_arr;
+        g_emit = g_emit + ", i64 ";
+        g_emit = g_emit + index;
+        emit(g_emit);
+        
+        datum st_emit : series = "    store ";
+        st_emit = st_emit + elem_type;
+        st_emit = st_emit + " ";
+        st_emit = st_emit + v_init;
+        st_emit = st_emit + ", ";
+        st_emit = st_emit + elem_type;
+        st_emit = st_emit + "* ";
+        st_emit = st_emit + g_tmp;
+        emit(st_emit);
+    conclude
+
+    verify (k == NODE_MEMBER_ASSIGN) then
+        datum left_node : ASTNode = node_heap[node.left];
+        datum base_t : series = get_expr_type(node.left);
+        datum s_name : series = base_t;
+        verify (substring(base_t, 0, 8) == "%struct.") then
+            s_name = substring(base_t, 8, length(base_t) - 8);
+        conclude
+
+        datum f_idx : whole = get_struct_field_index(s_name, node.text_val);
+        datum elem_type : series = get_struct_field_type(s_name, node.text_val);
+
+        datum obj_ptr : series = "";
+        datum is_ident : state = (left_node.kind == NODE_IDENTIFIER);
+        verify (is_ident) then
+            obj_ptr = "%" + left_node.text_val;
+        conclude
+
+        datum is_arr : state = (left_node.kind == NODE_ARRAY_ACCESS);
+        verify (is_arr) then
+             datum arr_index : series = gen_expression(left_node.condition);
+             datum arr_t : series = get_symbol_type(left_node.text_val);
+             datum loaded_arr : series = next_tmp();
+             datum em_ld : series = "    ";
+             em_ld = em_ld + loaded_arr;
+             em_ld = em_ld + " = load ";
+             em_ld = em_ld + arr_t;
+             em_ld = em_ld + ", ";
+             em_ld = em_ld + arr_t;
+             em_ld = em_ld + "* %";
+             em_ld = em_ld + left_node.text_val;
+             emit(em_ld);
+
+             datum gep_tmp_arr : series = next_tmp();
+             datum em_gep_arr : series = "    ";
+             em_gep_arr = em_gep_arr + gep_tmp_arr;
+             em_gep_arr = em_gep_arr + " = getelementptr inbounds ";
+             em_gep_arr = em_gep_arr + base_t;
+             em_gep_arr = em_gep_arr + ", ";
+             em_gep_arr = em_gep_arr + arr_t;
+             em_gep_arr = em_gep_arr + " ";
+             em_gep_arr = em_gep_arr + loaded_arr;
+             em_gep_arr = em_gep_arr + ", i64 ";
+             em_gep_arr = em_gep_arr + arr_index;
+             emit(em_gep_arr);
+             obj_ptr = gep_tmp_arr;
+        conclude
+
+        datum is_mem : state = (left_node.kind == NODE_MEMBER_ACCESS);
+        verify (is_mem) then
+             datum left_left_node : ASTNode = node_heap[left_node.left];
+             verify (left_left_node.kind == NODE_IDENTIFIER) then
+                  datum ll_ptr : series = "%" + left_left_node.text_val;
+                  datum ll_t : series = get_expr_type(left_node.left);
+                  datum ll_s_name : series = substring(ll_t, 8, length(ll_t) - 8);
+                  datum l_f_idx : whole = get_struct_field_index(ll_s_name, left_node.text_val);
+
+                  datum l_gep_tmp : series = next_tmp();
+                  datum em_gep_mem : series = "    ";
+                  em_gep_mem = em_gep_mem + l_gep_tmp;
+                  em_gep_mem = em_gep_mem + " = getelementptr inbounds ";
+                  em_gep_mem = em_gep_mem + ll_t;
+                  em_gep_mem = em_gep_mem + ", ";
+                  em_gep_mem = em_gep_mem + ll_t;
+                  em_gep_mem = em_gep_mem + "* ";
+                  em_gep_mem = em_gep_mem + ll_ptr;
+                  em_gep_mem = em_gep_mem + ", i32 0, i32 ";
+                  em_gep_mem = em_gep_mem + to_string(l_f_idx);
+                  emit(em_gep_mem);
+                  obj_ptr = l_gep_tmp;
+             otherwise
+                  reveal("Error: Unhandled deeper nested member assign");
+                  exit_program(1);
+             conclude
+        conclude
+
+        datum unhandled : state = (is_ident == false and is_arr == false and is_mem == false);
+        verify (unhandled) then
+            reveal("Error: Unhandled left side of member assign");
+            exit_program(1);
+        conclude
+
+        datum v_init : series = gen_expression(node.initializer);
+
+        datum gep_tmp : series = next_tmp();
+        datum gep_emit : series = "    ";
+        gep_emit = gep_emit + gep_tmp;
+        gep_emit = gep_emit + " = getelementptr inbounds ";
+        gep_emit = gep_emit + base_t;
+        gep_emit = gep_emit + ", ";
+        gep_emit = gep_emit + base_t;
+        gep_emit = gep_emit + "* ";
+        gep_emit = gep_emit + obj_ptr;
+        gep_emit = gep_emit + ", i32 0, i32 ";
+        gep_emit = gep_emit + to_string(f_idx);
+        emit(gep_emit);
+
+        datum st_emit : series = "    store ";
+        st_emit = st_emit + elem_type;
+        st_emit = st_emit + " ";
+        st_emit = st_emit + v_init;
+        st_emit = st_emit + ", ";
+        st_emit = st_emit + elem_type;
+        st_emit = st_emit + "* ";
+        st_emit = st_emit + gep_tmp;
+        emit(st_emit);
+    conclude
+
+    verify (k == NODE_EXPR_STMT) then
+        datum dummy : series = gen_expression(node.initializer);
+    conclude
+
+    verify (k == NODE_RETURN) then
+        datum h_init : state = (node.initializer != -1);
+        verify (h_init) then
+            datum r_val : series = gen_expression(node.initializer);
+            datum r_t : series = get_expr_type(node.initializer);
+            datum i_m : state = (current_func_name == "main");
+            verify (i_m) then
+                emit("    ret i32 0");
+            otherwise
+                datum re : series = "    ret ";
+                re = re + r_t;
+                re = re + " ";
+                re = re + r_val;
+                emit(re);
+            conclude
+        conclude
+        
+        datum n_init : state = (node.initializer == -1);
+        verify (n_init) then
+            datum is_m2 : state = (current_func_name == "main");
+            verify (is_m2) then
+                emit("    ret i32 0");
+            otherwise
+                emit("    ret void");
+            conclude
+        conclude
+    conclude
+
+    verify (k == NODE_IF) then
+        datum c_val : series = gen_expression(node.condition);
+        datum t_lab : series = next_label();
+        datum e_lab : series = next_label();
+        datum en_lab : series = next_label();
+
+        datum h_else : state = (node.else_branch != -1);
+        verify (h_else) then
+            datum if_e : series = "    br i1 ";
+            if_e = if_e + c_val;
+            if_e = if_e + ", label %";
+            if_e = if_e + t_lab;
+            if_e = if_e + ", label %";
+            if_e = if_e + e_lab;
+            emit(if_e);
+
+            emit(t_lab + ":");
+            visit_block(node.then_branch);
+            emit("    br label %" + en_lab);
+
+            emit(e_lab + ":");
+            visit_block(node.else_branch);
+            emit("    br label %" + en_lab);
+        otherwise
+            datum if_e2 : series = "    br i1 ";
+            if_e2 = if_e2 + c_val;
+            if_e2 = if_e2 + ", label %";
+            if_e2 = if_e2 + t_lab;
+            if_e2 = if_e2 + ", label %";
+            if_e2 = if_e2 + en_lab;
+            emit(if_e2);
+
+            emit(t_lab + ":");
+            visit_block(node.then_branch);
+            emit("    br label %" + en_lab);
+        conclude
+
+        emit(en_lab + ":");
+    conclude
+
+    verify (k == NODE_WHILE) then
+        datum c_lab : series = next_label();
+        datum b_lab : series = next_label();
+        datum end_l : series = next_label();
+
+        emit("    br label %" + c_lab);
+        emit(c_lab + ":");
+        datum cond_v : series = gen_expression(node.condition);
+
+        datum w_emit : series = "    br i1 ";
+        w_emit = w_emit + cond_v;
+        w_emit = w_emit + ", label %";
+        w_emit = w_emit + b_lab;
+        w_emit = w_emit + ", label %";
+        w_emit = w_emit + end_l;
+        emit(w_emit);
+
+        emit(b_lab + ":");
+        visit_block(node.then_branch);
+        emit("    br label %" + c_lab);
+
+        emit(end_l + ":");
+    conclude
+
+    verify (k == NODE_BLOCK) then
+        visit_block(node_idx);
+    conclude
+end
+algorithm visit_block(node_idx : whole) -> void
+begin
+    verify (node_idx == -1) then result; conclude
+    push_scope();
+    datum blk : ASTNode = node_heap[node_idx];
+    datum i : whole = 0;
+    datum children : sequence<whole> = blk.children;
+    datum len : whole = length(children);
+    cycle (i < len) do
+        visit_stmt(children[i]);
+        i = i + 1;
+    conclude
+    pop_scope();
+end
+
+algorithm generate_code(prog_idx : whole) -> void
+begin
+    reveal("DEBUG: generate_code called");
+    // Initial global headers
+    emit("; ModuleID = 'lors_module'");
+    emit("");
+
+    // External C standard library functions
+    emit("declare i32 @printf(i8*, ...)");
+    emit("declare i8* @malloc(i64)");
+    emit("declare void @free(i8*)");
+    emit("declare i8* @strcpy(i8*, i8*)");
+    emit("declare i8* @strcat(i8*, i8*)");
+    emit("declare i64 @strlen(i8*)");
+    emit("declare i32 @strcmp(i8*, i8*)");
+    emit("declare i32 @sprintf(i8*, i8*, ...)");
+    emit("declare i8* @strstr(i8*, i8*)");
+    emit("declare i8* @strncpy(i8*, i8*, i64)");
+    emit("declare i8* @fopen(i8*, i8*)");
+    emit("declare i64 @fread(i8*, i64, i64, i8*)");
+    emit("declare i64 @fwrite(i8*, i64, i64, i8*)");
+    emit("declare i32 @fclose(i8*)");
+    emit("declare i32 @fseek(i8*, i64, i32)");
+    emit("declare i64 @ftell(i8*)");
+    emit("declare i32 @remove(i8*)");
+    emit("declare i64 @atoll(i8*)");
+    emit("declare i32 @scanf(i8*, ...)");
+    emit("declare i32 @system(i8*)");
+    emit("declare void @exit(i32)");
+    emit("declare i32 @access(i8*, i32)");
+    emit("declare i8* @getenv(i8*)");
+
+    // Math functions
+    emit("declare double @pow(double, double)");
+    emit("declare double @sqrt(double)");
+    emit("declare double @sin(double)");
+    emit("declare double @cos(double)");
+    emit("declare double @tan(double)");
+    emit("declare double @abs(double)");
+    emit("declare double @atof(i8*)");
+
+    // Char functions
+    emit("declare i32 @toupper(i32)");
+    emit("declare i32 @tolower(i32)");
+    emit("declare i32 @isalnum(i32)");
+    emit("declare i32 @isalpha(i32)");
+    emit("declare i32 @isdigit(i32)");
+    emit("declare i32 @isspace(i32)");
+    emit("declare i32 @islower(i32)");
+    emit("declare i32 @isupper(i32)");
+    emit("");
+
+    // Global strings for formats
+    emit_global("@.str.newline = linkonce_odr unnamed_addr constant [2 x i8] c\"\\0A\\00\", align 1");
+    emit_global("@.str.fmt_i64 = linkonce_odr unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\", align 1");
+    emit_global("@.str.fmt_f64 = linkonce_odr unnamed_addr constant [4 x i8] c\"%f\\0A\\00\", align 1");
+    emit_global("@.str.fmt_str = linkonce_odr unnamed_addr constant [4 x i8] c\"%s\\0A\\00\", align 1");
+    emit_global("@.str.read_mode = linkonce_odr unnamed_addr constant [3 x i8] c\"rb\\00\", align 1");
+    emit_global("@.str.write_mode = linkonce_odr unnamed_addr constant [3 x i8] c\"wb\\00\", align 1");
+    emit_global("@.str.sprintf_i64 = linkonce_odr unnamed_addr constant [5 x i8] c\"%lld\\00\", align 1");
+    emit_global("@.str.sprintf_f64 = linkonce_odr unnamed_addr constant [3 x i8] c\"%f\\00\", align 1");
+    emit_global("@.str.scanf_i64 = linkonce_odr unnamed_addr constant [5 x i8] c\"%lld\\00\", align 1");
+    emit_global("@.str.scanf_f64 = linkonce_odr unnamed_addr constant [4 x i8] c\"%lf\\00\", align 1");
+    emit_global("@.str.scanf_str = linkonce_odr unnamed_addr constant [3 x i8] c\"%s\\00\", align 1");
+    emit_global("@.str.empty = linkonce_odr unnamed_addr constant [1 x i8] zeroinitializer, align 1");
+    emit_global("@__argc = internal global i32 0");
+    emit_global("@__argv = internal global i8** null");
+    emit("");
+    // Standard Library Implementation
+    emit("define linkonce_odr i8* @__to_upper(i8* %str) {");
+    emit("entry:");
+    emit("    %len = call i64 @strlen(i8* %str)");
+    emit("    %sz_plus = add i64 %len, 1");
+    emit("    %mem = call i8* @malloc(i64 %sz_plus)");
+    emit("    br label %cond");
+    emit("cond:");
+    emit("    %i = phi i64 [ 0, %entry ], [ %i_next, %body ]");
+    emit("    %cmp = icmp slt i64 %i, %len");
+    emit("    br i1 %cmp, label %body, label %end");
+    emit("body:");
+    emit("    %src_ptr = getelementptr inbounds i8, i8* %str, i64 %i");
+    emit("    %char = load i8, i8* %src_ptr");
+    emit("    %char_ext = zext i8 %char to i32");
+    emit("    %upper_i32 = call i32 @toupper(i32 %char_ext)");
+    emit("    %upper_char = trunc i32 %upper_i32 to i8");
+    emit("    %dst_ptr = getelementptr inbounds i8, i8* %mem, i64 %i");
+    emit("    store i8 %upper_char, i8* %dst_ptr");
+    emit("    %i_next = add i64 %i, 1");
+    emit("    br label %cond");
+    emit("end:");
+    emit("    %null_ptr = getelementptr inbounds i8, i8* %mem, i64 %len");
+    emit("    store i8 0, i8* %null_ptr");
+    emit("    ret i8* %mem");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i8* @__to_lower(i8* %str) {");
+    emit("entry:");
+    emit("    %len = call i64 @strlen(i8* %str)");
+    emit("    %sz_plus = add i64 %len, 1");
+    emit("    %mem = call i8* @malloc(i64 %sz_plus)");
+    emit("    br label %cond");
+    emit("cond:");
+    emit("    %i = phi i64 [ 0, %entry ], [ %i_next, %body ]");
+    emit("    %cmp = icmp slt i64 %i, %len");
+    emit("    br i1 %cmp, label %body, label %end");
+    emit("body:");
+    emit("    %src_ptr = getelementptr inbounds i8, i8* %str, i64 %i");
+    emit("    %char = load i8, i8* %src_ptr");
+    emit("    %char_ext = zext i8 %char to i32");
+    emit("    %lower_i32 = call i32 @tolower(i32 %char_ext)");
+    emit("    %lower_char = trunc i32 %lower_i32 to i8");
+    emit("    %dst_ptr = getelementptr inbounds i8, i8* %mem, i64 %i");
+    emit("    store i8 %lower_char, i8* %dst_ptr");
+    emit("    %i_next = add i64 %i, 1");
+    emit("    br label %cond");
+    emit("end:");
+    emit("    %null_ptr = getelementptr inbounds i8, i8* %mem, i64 %len");
+    emit("    store i8 0, i8* %null_ptr");
+    emit("    ret i8* %mem");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i1 @__is_alnum_whole(i64 %c) {");
+    emit("entry:");
+    emit("    %c_trunc = trunc i64 %c to i32");
+    emit("    %res = call i32 @isalnum(i32 %c_trunc)");
+    emit("    %cmp = icmp ne i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr void @__append(i8** %dest_ptr, i8* %src) {");
+    emit("entry:");
+    emit("    %ptr_is_null = icmp eq i8** %dest_ptr, null");
+    emit("    br i1 %ptr_is_null, label %early_exit, label %do_append");
+    emit("");
+    emit("do_append:");
+    emit("    %dest = load i8*, i8** %dest_ptr");
+    emit("    %cmp1 = icmp eq i8* %dest, null");
+    emit("    %safe_dest = select i1 %cmp1, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %dest");
+    emit("    %cmp2 = icmp eq i8* %src, null");
+    emit("    %safe_src = select i1 %cmp2, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %src");
+    emit("    %len1 = call i64 @strlen(i8* %safe_dest)");
+    emit("    %len2 = call i64 @strlen(i8* %safe_src)");
+    emit("    %total_len = add i64 %len1, %len2");
+    emit("    %total_size = add i64 %total_len, 1");
+    emit("    %mem = call i8* @malloc(i64 %total_size)");
+    emit("    call i8* @strcpy(i8* %mem, i8* %safe_dest)");
+    emit("    call i8* @strcat(i8* %mem, i8* %safe_src)");
+    emit("    store i8* %mem, i8** %dest_ptr");
+    emit("    br label %early_exit");
+    emit("");
+    emit("early_exit:");
+    emit("    ret void");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i1 @__is_digit_whole(i64 %c) {");
+    emit("entry:");
+    emit("    %c_trunc = trunc i64 %c to i32");
+    emit("    %res = call i32 @isdigit(i32 %c_trunc)");
+    emit("    %cmp = icmp ne i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i1 @__is_lower_whole(i64 %c) {");
+    emit("entry:");
+    emit("    %c_trunc = trunc i64 %c to i32");
+    emit("    %res = call i32 @islower(i32 %c_trunc)");
+    emit("    %cmp = icmp ne i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i1 @__is_upper_whole(i64 %c) {");
+    emit("entry:");
+    emit("    %c_trunc = trunc i64 %c to i32");
+    emit("    %res = call i32 @isupper(i32 %c_trunc)");
+    emit("    %cmp = icmp ne i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i1 @__is_alpha_whole(i64 %c) {");
+    emit("entry:");
+    emit("    %c_trunc = trunc i64 %c to i32");
+    emit("    %res = call i32 @isalpha(i32 %c_trunc)");
+    emit("    %cmp = icmp ne i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i1 @__is_space_whole(i64 %c) {");
+    emit("entry:");
+    emit("    %c_trunc = trunc i64 %c to i32");
+    emit("    %res = call i32 @isspace(i32 %c_trunc)");
+    emit("    %cmp = icmp ne i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i8* @__str_concat(i8* %s1, i8* %s2) {");
+    emit("entry:");
+    emit("    %cmp1 = icmp eq i8* %s1, null");
+    emit("    %safe_s1 = select i1 %cmp1, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %s1");
+    emit("    %cmp2 = icmp eq i8* %s2, null");
+    emit("    %safe_s2 = select i1 %cmp2, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %s2");
+    emit("    %len1 = call i64 @strlen(i8* %safe_s1)");
+    emit("    %len2 = call i64 @strlen(i8* %safe_s2)");
+    emit("    %total_len = add i64 %len1, %len2");
+    emit("    %total_size = add i64 %total_len, 1");
+    emit("    %mem = call i8* @malloc(i64 %total_size)");
+    emit("    call i8* @strcpy(i8* %mem, i8* %safe_s1)");
+    emit("    call i8* @strcat(i8* %mem, i8* %safe_s2)");
+    emit("    ret i8* %mem");
+    emit("}");
+
+    emit("define linkonce_odr i8* @__to_string_whole(i64 %val) {");
+    emit("entry:");
+    emit("    %mem = call i8* @malloc(i64 32)"); // Max i64 string length is ~20 chars + null
+    emit("    call i32 (i8*, i8*, ...) @sprintf(i8* %mem, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.sprintf_i64, i64 0, i64 0), i64 %val)");
+    emit("    ret i8* %mem");
+    emit("}");
+
+    emit("define linkonce_odr i8* @__to_string_precise(double %val) {");
+    emit("entry:");
+    emit("    %mem = call i8* @malloc(i64 64)");
+    emit("    call i32 (i8*, i8*, ...) @sprintf(i8* %mem, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.sprintf_f64, i64 0, i64 0), double %val)");
+    emit("    ret i8* %mem");
+    emit("}");
+
+    // File read
+    emit("define linkonce_odr i8* @__file_read(i8* %path) {");
+    emit("entry:");
+    emit("    %fp = call i8* @fopen(i8* %path, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.read_mode, i64 0, i64 0))");
+    emit("    %isnull = icmp eq i8* %fp, null");
+    emit("    br i1 %isnull, label %error, label %ok");
+    emit("ok:");
+    emit("    call i32 @fseek(i8* %fp, i64 0, i32 2)"); // SEEK_END = 2
+    emit("    %size = call i64 @ftell(i8* %fp)");
+    emit("    call i32 @fseek(i8* %fp, i64 0, i32 0)"); // SEEK_SET = 0
+    emit("    %sz_plus = add i64 %size, 1");
+    emit("    %buf = call i8* @malloc(i64 %sz_plus)");
+    emit("    call i64 @fread(i8* %buf, i64 1, i64 %size, i8* %fp)");
+    emit("    call i32 @fclose(i8* %fp)");
+    emit("    %end_ptr = getelementptr inbounds i8, i8* %buf, i64 %size");
+    emit("    store i8 0, i8* %end_ptr");
+    emit("    ret i8* %buf");
+    emit("error:");
+    emit("    %errbuf = call i8* @malloc(i64 1)");
+    emit("    store i8 0, i8* %errbuf");
+    emit("    ret i8* %errbuf");
+    emit("}");
+
+    // File write
+    emit("define linkonce_odr void @__file_write(i8* %path, i8* %content) {");
+    emit("entry:");
+    emit("    %fp = call i8* @fopen(i8* %path, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.write_mode, i64 0, i64 0))");
+    emit("    %isnull = icmp eq i8* %fp, null");
+    emit("    br i1 %isnull, label %error, label %ok");
+    emit("ok:");
+    emit("    %len = call i64 @strlen(i8* %content)");
+    emit("    call i64 @fwrite(i8* %content, i64 1, i64 %len, i8* %fp)");
+    emit("    call i32 @fclose(i8* %fp)");
+    emit("    ret void");
+    emit("error:");
+    emit("    ret void");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr i64 @arg_count() {");
+    emit("entry:");
+    emit("    %val = load i32, i32* @__argc");
+    emit("    %ext = sext i32 %val to i64");
+    emit("    ret i64 %ext");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr i8* @arg_value(i64 %i) {");
+    emit("entry:");
+    emit("    %ptr = load i8**, i8*** @__argv");
+    emit("    %item_ptr = getelementptr i8*, i8** %ptr, i64 %i");
+    emit("    %val = load i8*, i8** %item_ptr");
+    emit("    ret i8* %val");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr void @exit_program(i64 %code) {");
+    emit("entry:");
+    emit("    %trunc = trunc i64 %code to i32");
+    emit("    call void @exit(i32 %trunc)");
+    emit("    unreachable");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr void @execute_system(i8* %cmd) {");
+    emit("entry:");
+    emit("    call i32 @system(i8* %cmd)");
+    emit("    ret void");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr i1 @file_exists(i8* %path) {");
+    emit("entry:");
+    emit("    %res = call i32 @access(i8* %path, i32 0)"); // F_OK = 0
+    emit("    %cmp = icmp eq i32 %res, 0");
+    emit("    ret i1 %cmp");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr void @file_remove(i8* %path) {");
+    emit("entry:");
+    emit("    call i32 @remove(i8* %path)");
+    emit("    ret void");
+    emit("}");
+    emit("");
+    emit("define linkonce_odr i64 @__length(i8* %str) {");
+    emit("entry:");
+    emit("    %cmp = icmp eq i8* %str, null");
+    emit("    %safe_str = select i1 %cmp, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %str");
+    emit("    %len = call i64 @strlen(i8* %safe_str)");
+    emit("    ret i64 %len");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i64 @__char_at(i8* %str, i64 %idx) {");
+    emit("entry:");
+    emit("    %ptr = getelementptr inbounds i8, i8* %str, i64 %idx");
+    emit("    %val = load i8, i8* %ptr");
+    emit("    %res = zext i8 %val to i64");
+    emit("    ret i64 %res");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i8* @__env_get(i8* %key) {");
+    emit("entry:");
+    emit("    %res = call i8* @getenv(i8* %key)");
+    emit("    %isnull = icmp eq i8* %res, null");
+    emit("    br i1 %isnull, label %is_null, label %is_ok");
+    emit("is_null:");
+    emit("    %empty = getelementptr inbounds [1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0");
+    emit("    ret i8* %empty");
+    emit("is_ok:");
+    emit("    ret i8* %res");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i64 @__index_of(i8* %str, i8* %sub) {");
+    emit("entry:");
+    emit("    %cmp_str = icmp eq i8* %str, null");
+    emit("    %safe_str = select i1 %cmp_str, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %str");
+    emit("    %cmp_sub = icmp eq i8* %sub, null");
+    emit("    %safe_sub = select i1 %cmp_sub, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %sub");
+    emit("    %res = call i8* @strstr(i8* %safe_str, i8* %safe_sub)");
+    emit("    %isnull = icmp eq i8* %res, null");
+    emit("    br i1 %isnull, label %not_found, label %found");
+    emit("not_found:");
+    emit("    ret i64 -1");
+    emit("found:");
+    emit("    %p1 = ptrtoint i8* %res to i64");
+    emit("    %p2 = ptrtoint i8* %safe_str to i64");
+    emit("    %diff = sub i64 %p1, %p2");
+    emit("    ret i64 %diff");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i8* @__substring(i8* %str, i64 %start, i64 %len) {");
+    emit("entry:");
+    emit("    %cmp = icmp eq i8* %str, null");
+    emit("    %safe_str = select i1 %cmp, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %str");
+    emit("    %sz_plus = add i64 %len, 1");
+    emit("    %mem = call i8* @malloc(i64 %sz_plus)");
+    emit("    %src_ptr = getelementptr inbounds i8, i8* %safe_str, i64 %start");
+    emit("    call i8* @strncpy(i8* %mem, i8* %src_ptr, i64 %len)");
+    emit("    %null_ptr = getelementptr inbounds i8, i8* %mem, i64 %len");
+    emit("    store i8 0, i8* %null_ptr");
+    emit("    ret i8* %mem");
+    emit("}");
+    emit("");
+
+    emit("define linkonce_odr i8* @__reverse(i8* %str) {");
+    emit("entry:");
+    emit("    %cmp = icmp eq i8* %str, null");
+    emit("    %safe_str = select i1 %cmp, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %str");
+    emit("    %len = call i64 @strlen(i8* %safe_str)");
+    emit("    %sz_plus = add i64 %len, 1");
+    emit("    %mem = call i8* @malloc(i64 %sz_plus)");
+    emit("    %isnull = icmp eq i64 %len, 0");
+    emit("    br i1 %isnull, label %end, label %cond");
+    emit("cond:");
+    emit("    %i = phi i64 [ 0, %entry ], [ %i_next, %body ]");
+    emit("    %cmp2 = icmp slt i64 %i, %len");
+    emit("    br i1 %cmp2, label %body, label %end");
+    emit("body:");
+    emit("    %i_rev = sub i64 %len, 1");
+    emit("    %i_src = sub i64 %i_rev, %i");
+    emit("    %src_ptr = getelementptr inbounds i8, i8* %safe_str, i64 %i_src");
+    emit("    %char = load i8, i8* %src_ptr");
+    emit("    %dst_ptr = getelementptr inbounds i8, i8* %mem, i64 %i");
+    emit("    store i8 %char, i8* %dst_ptr");
+    emit("    %i_next = add i64 %i, 1");
+    emit("    br label %cond");
+    emit("end:");
+    emit("    %null_ptr = getelementptr inbounds i8, i8* %mem, i64 %len");
+    emit("    store i8 0, i8* %null_ptr");
+    emit("    ret i8* %mem");
+    emit("}");
+    emit("");
+
+    datum prog : ASTNode = node_heap[prog_idx];
+    datum i : whole = 0;
+    datum children : sequence<whole> = prog.children;
+    datum len : whole = length(children);
+
+    // First Pass: Collect all global functions and structs to allow forward references
+    cycle (i < len) do
+        datum node : ASTNode = node_heap[children[i]];
+        verify (node.kind == NODE_STRUCT_DECL) then
+            datum s_name : series = node.text_val;
+            datum s_emit : series = "%struct.";
+            s_emit = s_emit + s_name;
+            s_emit = s_emit + " = type { ";
+
+            datum j : whole = 0;
+            datum f_list : sequence<whole> = node.children;
+            datum f_len : whole = length(f_list);
+            cycle (j < f_len) do
+                datum f_node : ASTNode = node_heap[f_list[j]];
+                datum f_type : series = map_type_node(f_node.type_node);
+                s_emit = s_emit + f_type;
+
+                datum not_last_f : state = (j < f_len - 1);
+                verify (not_last_f) then
+                    s_emit = s_emit + ", ";
+                conclude
+                j = j + 1;
+            conclude
+
+            s_emit = s_emit + " }";
+            emit(s_emit);
+        conclude
+
+        verify (node.kind == NODE_FUNC_DECL) then
+            datum fname : series = node.text_val;
+            datum rtype : series = map_type_node(node.type_node);
+            datum params : series = "";
+
+            datum is_gen : state = (fname == "genesis");
+            verify (is_gen) then
+                fname = "main";
+                rtype = "i32"; // Return int from main
+                params = "i32 %argc, i8** %argv";
+            otherwise
+                datum j : whole = 0;
+                datum p_list : sequence<whole> = node.children;
+                datum p_len : whole = length(p_list);
+                cycle (j < p_len) do
+                    datum p_node : ASTNode = node_heap[p_list[j]];
+                    datum p_type : series = map_type_node(p_node.type_node);
+                    
+                    params = params + p_type;
+                    params = params + " %";
+                    params = params + p_node.text_val;
+                    
+                    datum not_last : state = (j < p_len - 1);
+                    verify (not_last) then 
+                        params = params + ", "; 
+                    conclude
+                    j = j + 1;
+                conclude
+            conclude
+
+            datum has_b : state = (node.then_branch != -1);
+            verify (not has_b) then
+                datum decl_em : series = "declare ";
+                decl_em = decl_em + rtype;
+                decl_em = decl_em + " @";
+                decl_em = decl_em + fname;
+                decl_em = decl_em + "(";
+                decl_em = decl_em + params;
+                decl_em = decl_em + ")";
+                emit(decl_em);
+            conclude
+            
+            add_func(node.text_val, rtype);
+        conclude
+        i = i + 1;
+    conclude
+
+    // NEW Pass: Global Variables
+    i = 0;
+    cycle (i < len) do
+        datum node : ASTNode = node_heap[children[i]];
+        verify (node.kind == NODE_VAR_DECL) then
+             datum v_name : series = node.text_val;
+             datum v_type : series = map_type_node(node.type_node);
+             add_symbol(v_name, v_type);
+
+             datum init_val : series = "0";
+             verify (node.initializer != -1) then
+                  datum init_node : ASTNode = node_heap[node.initializer];
+                  verify (init_node.kind == NODE_LITERAL) then
+                       init_val = init_node.text_val;
+                  conclude
+             conclude
+             
+             verify (v_type == "double" and init_val == "0") then init_val = "0.0"; conclude
+             verify (v_type == "i8*" and init_val == "0") then init_val = "null"; conclude
+             
+             emit_global("@" + v_name + " = global " + v_type + " " + init_val + ", align 8");
+        conclude
+        i = i + 1;
+    conclude
+
+    // Second Pass: Generate code for global initializers and functions
+    i = 0;
+    cycle (i < len) do
+        datum node : ASTNode = node_heap[children[i]];
+        verify (node.kind == NODE_FUNC_DECL) then
+            datum has_body : state = (node.then_branch != -1);
+            verify (has_body) then
+                datum fname : series = node.text_val;
+            datum rtype : series = map_type_node(node.type_node);
+            datum params : series = "";
+
+            datum is_gen2 : state = (fname == "genesis");
+            verify (is_gen2) then
+                fname = "main";
+                rtype = "i32";
+                params = "i32 %argc, i8** %argv";
+            otherwise
+                datum j : whole = 0;
+                datum p_list : sequence<whole> = node.children;
+                datum p_len : whole = length(p_list);
+                cycle (j < p_len) do
+                    datum p_node : ASTNode = node_heap[p_list[j]];
+                    datum p_type : series = map_type_node(p_node.type_node);
+                    
+                    params = params + p_type;
+                    params = params + " %";
+                    params = params + p_node.text_val;
+                    params = params + ".param";
+                    
+                    datum not_last2 : state = (j < p_len - 1);
+                    verify (not_last2) then 
+                        params = params + ", "; 
+                    conclude
+                    j = j + 1;
+                conclude
+            conclude
+
+            current_func_name = fname;
+            
+            datum def_em : series = "define ";
+            def_em = def_em + rtype;
+            def_em = def_em + " @";
+            def_em = def_em + fname;
+            def_em = def_em + "(";
+            def_em = def_em + params;
+            def_em = def_em + ") {";
+            emit(def_em);
+            
+            emit("entry:");
+            
+            datum is_gen_entry : state = (node.text_val == "genesis");
+            verify (is_gen_entry) then
+                emit("    store i32 %argc, i32* @__argc");
+                emit("    store i8** %argv, i8*** @__argv");
+            conclude
+            
+            push_scope();
+
+            // Allocate parameters on stack
+            datum is_not_gen : state = (node.text_val != "genesis");
+            verify (is_not_gen) then
+                datum j2 : whole = 0;
+                datum p_list2 : sequence<whole> = node.children;
+                datum p_len2 : whole = length(p_list2);
+                cycle (j2 < p_len2) do
+                    datum p_node2 : ASTNode = node_heap[p_list2[j2]];
+                    datum p_type2 : series = map_type_node(p_node2.type_node);
+                    
+                    datum p_name : series = p_node2.text_val;
+                    emit("    %" + p_name + " = alloca " + p_type2);
+                    
+                    datum st_em : series = "    store ";
+                    st_em = st_em + p_type2;
+                    st_em = st_em + " %";
+                    st_em = st_em + p_name;
+                    st_em = st_em + ".param, ";
+                    st_em = st_em + p_type2;
+                    st_em = st_em + "* %";
+                    st_em = st_em + p_name;
+                    emit(st_em);
+                    
+                    add_symbol(p_name, p_type2);
+                    j2 = j2 + 1;
+                conclude
+            conclude
+            
+            visit_block(node.then_branch);
+            pop_scope();
+            
+            // Ensure every function has a return
+            datum is_void : state = (rtype == "void");
+            verify (is_void) then
+                emit("    ret void");
+            otherwise 
+                datum is_m3 : state = (fname == "main");
+                verify (is_m3) then
+                    emit("    ret i32 0");
+                conclude
+            conclude
+
+            emit("}");
+        conclude
+    conclude
+    i = i + 1;
+conclude
+    
+    // Global strings and output
+    codegen_output = global_strings_output + codegen_output;
+end

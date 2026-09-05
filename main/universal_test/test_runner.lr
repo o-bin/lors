@@ -1,0 +1,165 @@
+algorithm contains(s : series, sub : series) -> state
+begin
+    datum len : whole = length(s);
+    datum sub_len : whole = length(sub);
+    datum i : whole = 0;
+
+    verify (sub_len > len) then result false; conclude
+
+    cycle (i <= len - sub_len) do
+        datum chunk : series = substring(s, i, sub_len);
+        verify (chunk == sub) then result true; conclude
+        i = i + 1;
+    conclude
+    result false;
+end
+
+algorithm genesis() -> whole
+begin
+    reveal("========================================");
+    reveal("   UNIVERSAL TEST RUNNER (SELF-HOSTED)");
+    reveal("========================================");
+
+    datum compiler_bin : series = "../self_hosted_v5/lors_compiler";
+
+    verify (file_exists(compiler_bin) == false) then
+        reveal("Error: New compiler binary not found at " + compiler_bin);
+        exit_program(1);
+    conclude
+
+    datum dirs_1 : series = "lors/examples";
+    datum dirs_2 : series = "lors/tests";
+    datum dirs_3 : series = "test_v2";
+
+    datum total_passed : whole = 0;
+    datum total_failed : whole = 0;
+
+    datum dir : series = "";
+    datum test_file : series = "";
+    datum exe : series = "";
+    datum cmd : series = "";
+    datum compile_ret : whole = 0;
+    datum run_cmd : series = "";
+    datum handled : state = false;
+    datum run_ret : whole = 0;
+
+    datum i : whole = 0;
+    datum j : whole = 0;
+
+    datum content : series = "";
+    datum content_len : whole = 0;
+    datum c_start : whole = 0;
+    datum c_i : whole = 0;
+    datum c : whole = 0;
+
+    cycle (i < 3) do
+        verify (i == 0) then dir = dirs_1; conclude
+        verify (i == 1) then dir = dirs_2; conclude
+        verify (i == 2) then dir = dirs_3; conclude
+
+        reveal("Checking directory: " + dir);
+
+        datum list_file : series = "test_list.tmp";
+        // Use execute_system to list files
+        execute_system("ls ../" + dir + "/*.lr > " + list_file);
+
+        verify (file_exists(list_file)) then
+            content = file_read(list_file);
+            content_len = length(content);
+            c_start = 0;
+            c_i = 0;
+
+            cycle (c_i < content_len) do
+                c = char_at(content, c_i);
+                verify (c == 10) then // Newline found
+                    test_file = substring(content, c_start, c_i - c_start);
+                    verify (length(test_file) > 0) then
+                        // Skip if it is shared.inc or similar (not a test entry point)
+                        verify (contains(test_file, ".inc") == false) then
+                            reveal(">> TEST: " + test_file);
+
+                            // 1. Compile
+                            exe = substring(test_file, 0, length(test_file) - 3);
+                            cmd = compiler_bin + " " + test_file + " > /dev/null 2>&1";
+
+                            reveal("   Compiling...");
+                            compile_ret = execute_system(cmd);
+
+                            verify (compile_ret == 0 and file_exists(exe)) then
+                                // 2. Run
+                                run_cmd = "./" + exe;
+                                handled = false;
+
+                                // Handle inputs
+                                verify (contains(exe, "test_calculator")) then
+                                     reveal("   Input: 1, 10, 20");
+                                     run_cmd = "printf '1\\n10\\n20\\n' | " + run_cmd;
+                                     handled = true;
+                                conclude
+
+                                verify (handled == false and contains(exe, "test_string_input")) then
+                                     reveal("   Input: HelloInput");
+                                     run_cmd = "printf 'HelloInput\\n' | " + run_cmd;
+                                     handled = true;
+                                conclude
+
+                                verify (handled == false and contains(exe, "test_cli_args_basic")) then
+                                     reveal("   Args: arg1 arg2");
+                                     run_cmd = run_cmd + " arg1 arg2";
+                                     handled = true;
+                                conclude
+
+                                verify (handled == false and contains(exe, "test_cli_args_usage")) then
+                                     reveal("   Args: myargument");
+                                     run_cmd = run_cmd + " myargument";
+                                     handled = true;
+                                conclude
+
+                                reveal("   Output:");
+                                reveal("   -------");
+
+                                // Execute allowing raw output to terminal
+                                run_ret = execute_system(run_cmd);
+
+                                reveal("   -------");
+
+                                verify (run_ret == 0) then
+                                    reveal("   [PASS]");
+                                    total_passed = total_passed + 1;
+                                otherwise
+                                    reveal("   [FAIL] Runtime Error (Exit Code " + to_string(run_ret) + ")");
+                                    total_failed = total_failed + 1;
+                                conclude
+
+                                // Cleanup
+                                file_remove(exe);
+                            otherwise
+                                reveal("   [FAIL] Compilation Error");
+                                total_failed = total_failed + 1;
+                            conclude
+
+                            reveal("");
+                        conclude
+                    conclude
+                    c_start = c_i + 1;
+                conclude
+                c_i = c_i + 1;
+            conclude
+
+            file_remove(list_file);
+        conclude
+        i = i + 1;
+    conclude
+
+    reveal("========================================");
+    reveal("Summary:");
+    reveal("  Passed: " + to_string(total_passed));
+    reveal("  Failed: " + to_string(total_failed));
+    reveal("========================================");
+
+    verify (total_failed > 0) then
+        exit_program(1);
+    conclude
+
+    result 0;
+end

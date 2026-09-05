@@ -1,0 +1,8 @@
+# Ignore compiled object files (.o)
+*.o
+**/*.o
+build_modular_objs/*.o
+
+# Temporary build artifacts
+*.log
+*.tmp

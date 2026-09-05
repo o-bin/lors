@@ -1,0 +1,19 @@
+--- self_hosted_v5/self_compiler/llvm_codegen.inc
++++ self_hosted_v5/self_compiler/llvm_codegen.inc
+@@ -1136,6 +1136,15 @@
+     emit("    ret i1 %cmp");
+     emit("}");
+     emit("");
+
++    emit("define linkonce_odr i1 @__is_digit_whole(i64 %c) {");
++    emit("entry:");
++    emit("    %c_trunc = trunc i64 %c to i32");
++    emit("    %res = call i32 @isdigit(i32 %c_trunc)");
++    emit("    %cmp = icmp ne i32 %res, 0");
++    emit("    ret i1 %cmp");
++    emit("}");
++    emit("");
++
+     emit("define linkonce_odr i8* @__str_concat(i8* %s1, i8* %s2) {");
+     emit("entry:");
+     emit("    %cmp1 = icmp eq i8* %s1, null");

@@ -1,0 +1,18 @@
+// Experiment: Calling OpenGL from Lors
+// We need to declare the functions we want to use from external libraries.
+
+algorithm glClearColor(r : precise, g : precise, b : precise, a : precise) -> void;
+
+algorithm genesis() -> whole
+begin
+    reveal("Initializing Graphics Experiment...");
+    
+    // In a real app we'd need to create a window first (GLFW/GLUT)
+    // But let's see if we can at least call the function and link it.
+    
+    glClearColor(0.2, 0.3, 0.4, 1.0);
+    
+    reveal("OpenGL function called successfully (simulated link)");
+    
+    result 0;
+end

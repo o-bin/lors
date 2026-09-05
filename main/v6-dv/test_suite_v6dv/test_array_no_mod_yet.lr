@@ -1,0 +1,26 @@
+// ==========================================
+// Test: Array Linear Search Algorithm
+// ==========================================
+
+algorithm find_index(arr : sequence<whole>, target : whole) -> whole
+begin
+    datum n : whole = length(arr);
+    datum i : whole = 0;
+    cycle (i < n) do
+        verify (arr[i] == target) then
+            result i;
+        conclude
+        i = i + 1;
+    conclude
+    result -1;
+end
+
+algorithm genesis() -> whole
+begin
+    datum numbers : sequence<whole> = [100, 250, 400, 850];
+    datum idx1 : whole = find_index(numbers, 400);
+    datum idx2 : whole = find_index(numbers, 999);
+    reveal(idx1);
+    reveal(idx2);
+    result 0;
+end

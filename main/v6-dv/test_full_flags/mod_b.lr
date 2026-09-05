@@ -1,0 +1,9 @@
+algorithm calculate_multiplier(x : whole, y : whole) -> whole;
+
+algorithm genesis() -> whole
+begin
+    datum res : whole = calculate_multiplier(5, 6);
+    reveal("Batch Multi-Module Result:");
+    reveal(res);
+    result 0;
+end

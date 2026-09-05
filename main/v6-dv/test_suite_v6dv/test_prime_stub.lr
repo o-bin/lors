@@ -1,0 +1,29 @@
+// ==========================================
+// Test: Prime Number Checker Algorithm
+// ==========================================
+
+algorithm check_prime(n : whole) -> state
+begin
+    verify (n <= 1) then
+        result false;
+    conclude
+    datum i : whole = 2;
+    cycle (i * i <= n) do
+        verify (n % i == 0) then
+            result false;
+        conclude
+        i = i + 1;
+    conclude
+    result true;
+end
+
+algorithm genesis() -> whole
+begin
+    datum p1 : state = check_prime(7);
+    datum p2 : state = check_prime(12);
+    datum p3 : state = check_prime(29);
+    reveal(p1);
+    reveal(p2);
+    reveal(p3);
+    result 0;
+end

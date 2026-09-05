@@ -1,0 +1,38 @@
+incorporate "zbinc/sc_tokens.inc"
+incorporate "zbinc/sc_ast.inc"
+incorporate "zbinc/sc_utils.inc"
+incorporate "zbinc/sc_lexer.inc"
+incorporate "zbinc/sc_parser.inc"
+incorporate "zbinc/sc_codegen.inc"
+
+algorithm genesis() -> whole
+begin
+    verify (arg_count() < 2) then
+        reveal("Usage: lors_ns <file.lr>");
+        exit_program(1);
+    conclude
+
+    datum input_file : series = arg_value(1);
+    datum raw : series = file_read(input_file);
+    
+    // 1. Process
+    lexer_init(raw);
+    tokenize();
+    
+    // 2. Parse
+    parser_init();
+    datum prog : whole = parse_program();
+    
+    // 3. Generate NASM
+    generate_nasm(prog);
+    
+    // 4. Output
+    datum out_asm : series = "out.asm";
+    file_write(out_asm, codegen_output);
+    
+    // 5. Assemble and Link
+    datum cmd : series = "nasm -f elf64 out.asm -o out.o && ld out.o -o out";
+    execute_system(cmd);
+    
+    result 0;
+end

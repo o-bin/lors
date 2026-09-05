@@ -1,0 +1,18 @@
+// ==========================================
+// Test: Array Declaration & Element Traversal
+// ==========================================
+
+algorithm genesis() -> whole
+begin
+    datum arr : sequence<whole> = [10, 20, 30, 40, 50];
+    datum total : whole = 0;
+    datum i : whole = 0;
+    datum len : whole = length(arr);
+    cycle (i < len) do
+        total = total + arr[i];
+        i = i + 1;
+    conclude
+    reveal(len);
+    reveal(total);
+    result 0;
+end

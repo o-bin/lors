@@ -1,0 +1,30 @@
+{
+  "name": "lors-vscode-extension",
+  "displayName": "Lors Language Support",
+  "description": "Soporte puro de sintaxis para el lenguaje Lors",
+  "version": "1.0.0",
+  "publisher": "emmanuel",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lors",
+        "aliases": ["Lors", "lors"],
+        "extensions": [".lr"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "lors",
+        "scopeName": "source.lors",
+        "path": "./lors.tmLanguage.json"
+      }
+    ]
+  }
+}

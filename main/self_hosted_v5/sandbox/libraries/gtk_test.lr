@@ -1,0 +1,32 @@
+// GTK4 Minimal Demo in Lors V5
+algorithm gtk_init() -> void;
+algorithm gtk_window_new() -> series;
+algorithm gtk_window_set_title(win : series, title : series) -> void;
+algorithm gtk_window_set_default_size(win : series, w : whole, h : whole) -> void;
+algorithm gtk_window_present(win : series) -> void;
+algorithm g_main_context_iteration(ctx : whole, blocking : state) -> state;
+
+algorithm genesis() -> whole
+begin
+    reveal("========================================");
+    reveal("    GTK4 EXPERIMENT - LORS V5 NATIVE");
+    reveal("========================================");
+    
+    gtk_init();
+    
+    datum win : series = gtk_window_new();
+    gtk_window_set_title(win, "Ventana Nativa de Lors V5");
+    gtk_window_set_default_size(win, 600, 400);
+    
+    reveal("Mostrando ventana...");
+    gtk_window_present(win);
+    
+    reveal("Cerrar la ventana detendra el proceso (o Ctrl+C)");
+    
+    // Bucle de eventos minimalista
+    cycle (true) do
+        g_main_context_iteration(0, true);
+    conclude
+    
+    result 0;
+end

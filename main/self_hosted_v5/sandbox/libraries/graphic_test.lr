@@ -1,0 +1,14 @@
+incorporate "graphic.inc"
+
+algorithm genesis() -> whole
+begin
+    reveal("Starting Graphics Library Test...");
+    
+    graphics_init_color(0.1, 0.2, 0.3);
+    graphics_clear_screen();
+    glFlush();
+    
+    reveal("Graphics operations executed successfully!");
+    
+    result 0;
+end

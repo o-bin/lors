@@ -1,0 +1,10 @@
+--- self_hosted_v5/self_compiler/llvm_codegen.inc
++++ self_hosted_v5/self_compiler/llvm_codegen.inc
+@@ -421,6 +421,7 @@
+         verify (fname == "to_upper") then fname = "__to_upper"; conclude
+         verify (fname == "to_lower") then fname = "__to_lower"; conclude
+         verify (fname == "is_alnum") then fname = "__is_alnum_whole"; conclude
++        verify (fname == "is_digit") then fname = "__is_digit_whole"; conclude
+         verify (fname == "to_precise") then fname = "atof"; conclude
+         verify (fname == "to_float") then fname = "atof"; conclude
+         verify (fname == "index_of") then fname = "__index_of"; conclude

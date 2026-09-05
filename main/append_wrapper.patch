@@ -1,0 +1,36 @@
+--- self_hosted_v5/self_compiler/llvm_codegen.inc
++++ self_hosted_v5/self_compiler/llvm_codegen.inc
+@@ -421,6 +421,7 @@
+         verify (fname == "to_upper") then fname = "__to_upper"; conclude
+         verify (fname == "to_lower") then fname = "__to_lower"; conclude
+         verify (fname == "is_alnum") then fname = "__is_alnum_whole"; conclude
++        verify (fname == "append") then fname = "__append"; conclude
+         verify (fname == "is_digit") then fname = "__is_digit_whole"; conclude
+         verify (fname == "to_precise") then fname = "atof"; conclude
+         verify (fname == "to_float") then fname = "atof"; conclude
+@@ -1136,6 +1137,25 @@
+     emit("    ret i1 %cmp");
+     emit("}");
+     emit("");
++
++    emit("define linkonce_odr void @__append(i8** %dest_ptr, i8* %src) {");
++    emit("entry:");
++    emit("    %dest = load i8*, i8** %dest_ptr");
++    emit("    %cmp1 = icmp eq i8* %dest, null");
++    emit("    %safe_dest = select i1 %cmp1, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %dest");
++    emit("    %cmp2 = icmp eq i8* %src, null");
++    emit("    %safe_src = select i1 %cmp2, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str.empty, i64 0, i64 0), i8* %src");
++    emit("    %len1 = call i64 @strlen(i8* %safe_dest)");
++    emit("    %len2 = call i64 @strlen(i8* %safe_src)");
++    emit("    %total_len = add i64 %len1, %len2");
++    emit("    %total_size = add i64 %total_len, 1");
++    emit("    %mem = call i8* @malloc(i64 %total_size)");
++    emit("    call i8* @strcpy(i8* %mem, i8* %safe_dest)");
++    emit("    call i8* @strcat(i8* %mem, i8* %safe_src)");
++    emit("    store i8* %mem, i8** %dest_ptr");
++    emit("    ret void");
++    emit("}");
++    emit("");
+
+     emit("define linkonce_odr i1 @__is_digit_whole(i64 %c) {");
+     emit("entry:");

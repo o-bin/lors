@@ -1,0 +1,52 @@
+mkdir -p tests
+cp -r ../lors/tests/* tests/ || true
+mkdir -p examples
+cp -r ../lors/examples/* examples/ || true
+mkdir -p flags_test
+cp -r ../flags_test/* flags_test/ || true
+mkdir -p universal_test
+cp -r ../universal_test/* universal_test/ || true
+# Since LLVM backend is a proof of concept, we just compile them.
+# Full runtime semantics are not yet fully implemented (arrays, all math ops, etc)
+# This demonstrates that the compiler can parse and generate LLVM IR.
+Compiling and running tests/edge_cases.lr
+Compiling to LLVM IR: tests/edge_cases.lr
+DEBUG: generate_code called
+120
+Factorial correct
+Compiling and running tests/test_adv_math_io.lr
+Compiling to LLVM IR: tests/test_adv_math_io.lr
+DEBUG: generate_code called
+78.539750
+Compiling and running tests/test_array_access.lr
+Compiling to LLVM IR: tests/test_array_access.lr
+DEBUG: generate_code called
+20
+Compiling and running tests/test_array_decl.lr
+Compiling to LLVM IR: tests/test_array_decl.lr
+DEBUG: generate_code called
+Compiling and running tests/test_array_file_io.lr
+Compiling to LLVM IR: tests/test_array_file_io.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_array_file_io.lr. Use -debug to see details.
+Compiling and running tests/test_array_modify.lr
+Compiling to LLVM IR: tests/test_array_modify.lr
+DEBUG: generate_code called
+99
+2
+198
+6
+Compiling and running tests/test_array_no_mod_yet.lr
+Compiling to LLVM IR: tests/test_array_no_mod_yet.lr
+DEBUG: generate_code called
+Compiling and running tests/test_bool_logic_complex.lr
+Compiling to LLVM IR: tests/test_bool_logic_complex.lr
+DEBUG: generate_code called
+Complex logic pass
+Negation pass
+Compiling and running tests/test_calculator.lr
+Compiling to LLVM IR: tests/test_calculator.lr
+DEBUG: generate_code called
+make: *** wait: No child processes.  Stop.
+make: *** Waiting for unfinished jobs....
+make: *** wait: No child processes.  Stop.

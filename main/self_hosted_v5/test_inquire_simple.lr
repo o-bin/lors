@@ -1,0 +1,6 @@
+algorithm genesis() -> whole
+begin
+    datum x : whole = inquire();
+    reveal(x);
+    result 0;
+end

@@ -1,0 +1,16 @@
+// ==========================================
+// Test: Empty Sequence Length & Safety Checks
+// ==========================================
+
+algorithm genesis() -> whole
+begin
+    datum empty : sequence<whole> = [];
+    datum len : whole = length(empty);
+    reveal(len);
+    verify (len == 0) then
+        reveal("Empty sequence verified successfully");
+    otherwise
+        reveal("Error: Sequence not empty");
+    conclude
+    result 0;
+end

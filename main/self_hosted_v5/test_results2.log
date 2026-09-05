@@ -1,0 +1,250 @@
+mkdir -p tests
+cp -r ../lors/tests/* tests/ || true
+mkdir -p examples
+cp -r ../lors/examples/* examples/ || true
+mkdir -p flags_test
+cp -r ../flags_test/* flags_test/ || true
+mkdir -p universal_test
+cp -r ../universal_test/* universal_test/ || true
+# Since LLVM backend is a proof of concept, we just compile them.
+# Full runtime semantics are not yet fully implemented (arrays, all math ops, etc)
+# This demonstrates that the compiler can parse and generate LLVM IR.
+Compiling and running tests/edge_cases.lr
+Compiling to LLVM IR: tests/edge_cases.lr
+120
+Factorial correct
+Compiling and running tests/test_adv_math_io.lr
+Compiling to LLVM IR: tests/test_adv_math_io.lr
+Compiling and running tests/test_array_access.lr
+Compiling to LLVM IR: tests/test_array_access.lr
+20
+Compiling and running tests/test_array_decl.lr
+Compiling to LLVM IR: tests/test_array_decl.lr
+Compiling and running tests/test_array_file_io.lr
+Compiling to LLVM IR: tests/test_array_file_io.lr
+Error: Compilation failed for tests/test_array_file_io.lr. Use -debug to see details.
+Compiling and running tests/test_array_modify.lr
+Compiling to LLVM IR: tests/test_array_modify.lr
+99
+2
+198
+6
+Compiling and running tests/test_array_no_mod_yet.lr
+Compiling to LLVM IR: tests/test_array_no_mod_yet.lr
+Compiling and running tests/test_bool_logic_complex.lr
+Compiling to LLVM IR: tests/test_bool_logic_complex.lr
+Complex logic pass
+Negation pass
+Compiling and running tests/test_calculator.lr
+Compiling to LLVM IR: tests/test_calculator.lr
+Error: Compilation failed for tests/test_calculator.lr. Use -debug to see details.
+Compiling and running tests/test_chain_add.lr
+Compiling to LLVM IR: tests/test_chain_add.lr
+6.000000
+Compiling and running tests/test_chemistry_molar.lr
+Compiling to LLVM IR: tests/test_chemistry_molar.lr
+Mass of water:
+36.030000
+Compiling and running tests/test_cli_args_basic.lr
+Compiling to LLVM IR: tests/test_cli_args_basic.lr
+Error: Compilation failed for tests/test_cli_args_basic.lr. Use -debug to see details.
+Compiling and running tests/test_cli_args_usage.lr
+Compiling to LLVM IR: tests/test_cli_args_usage.lr
+Error: Compilation failed for tests/test_cli_args_usage.lr. Use -debug to see details.
+Compiling and running tests/test_empty_array.lr
+Compiling to LLVM IR: tests/test_empty_array.lr
+Compiling and running tests/test_even_odd.lr
+Compiling to LLVM IR: tests/test_even_odd.lr
+Error: Compilation failed for tests/test_even_odd.lr. Use -debug to see details.
+Compiling and running tests/test_factorial.lr
+Compiling to LLVM IR: tests/test_factorial.lr
+120
+Compiling and running tests/test_fibonacci.lr
+Compiling to LLVM IR: tests/test_fibonacci.lr
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+Compiling and running tests/test_file_custom_ext.lr
+Compiling to LLVM IR: tests/test_file_custom_ext.lr
+Error: Compilation failed for tests/test_file_custom_ext.lr. Use -debug to see details.
+Compiling and running tests/test_file_write_read.lr
+Compiling to LLVM IR: tests/test_file_write_read.lr
+Error: Compilation failed for tests/test_file_write_read.lr. Use -debug to see details.
+Compiling and running tests/test_float_ops.lr
+Compiling to LLVM IR: tests/test_float_ops.lr
+9.500000
+Compiling and running tests/test_fs_delete_file.lr
+Compiling to LLVM IR: tests/test_fs_delete_file.lr
+Error: Compilation failed for tests/test_fs_delete_file.lr. Use -debug to see details.
+Compiling and running tests/test_fs_exists_check.lr
+Compiling to LLVM IR: tests/test_fs_exists_check.lr
+Error: Compilation failed for tests/test_fs_exists_check.lr. Use -debug to see details.
+Compiling and running tests/test_fs_io_flow.lr
+Compiling to LLVM IR: tests/test_fs_io_flow.lr
+Error: Compilation failed for tests/test_fs_io_flow.lr. Use -debug to see details.
+Compiling and running tests/test_hypotenuse.lr
+Compiling to LLVM IR: tests/test_hypotenuse.lr
+3.535534
+Compiling and running tests/test_inc_a.lr
+Compiling to LLVM IR: tests/test_inc_a.lr
+Error: Compilation failed for tests/test_inc_a.lr. Use -debug to see details.
+Compiling and running tests/test_is_alnum.lr
+Compiling to LLVM IR: tests/test_is_alnum.lr
+Error: Compilation failed for tests/test_is_alnum.lr. Use -debug to see details.
+Compiling and running tests/test_logic_and.lr
+Compiling to LLVM IR: tests/test_logic_and.lr
+Correct
+Compiling and running tests/test_logic_mixed.lr
+Compiling to LLVM IR: tests/test_logic_mixed.lr
+Correct
+Compiling and running tests/test_logic_not.lr
+Compiling to LLVM IR: tests/test_logic_not.lr
+Correct
+Compiling and running tests/test_logic_or.lr
+Compiling to LLVM IR: tests/test_logic_or.lr
+Correct
+Compiling and running tests/test_loop_sum.lr
+Compiling to LLVM IR: tests/test_loop_sum.lr
+10
+Compiling and running tests/test_math_abs.lr
+Compiling to LLVM IR: tests/test_math_abs.lr
+-10.500000
+Compiling and running tests/test_math_pi.lr
+Compiling to LLVM IR: tests/test_math_pi.lr
+-1.000000
+Compiling and running tests/test_math_pow.lr
+Compiling to LLVM IR: tests/test_math_pow.lr
+8.000000
+Compiling and running tests/test_math_root.lr
+Compiling to LLVM IR: tests/test_math_root.lr
+4.000000
+Compiling and running tests/test_math_trig.lr
+Compiling to LLVM IR: tests/test_math_trig.lr
+0.000000
+1.000000
+Compiling and running tests/test_mixed_parsing.lr
+Compiling to LLVM IR: tests/test_mixed_parsing.lr
+Error: Compilation failed for tests/test_mixed_parsing.lr. Use -debug to see details.
+Compiling and running tests/test_nested_logic_advanced.lr
+Compiling to LLVM IR: tests/test_nested_logic_advanced.lr
+Deep nesting pass
+Compiling and running tests/test_nested_loops.lr
+Compiling to LLVM IR: tests/test_nested_loops.lr
+0
+1
+10
+11
+20
+21
+Compiling and running tests/test_nested_verify.lr
+Compiling to LLVM IR: tests/test_nested_verify.lr
+Inside range
+Compiling and running tests/test_order_ops.lr
+Compiling to LLVM IR: tests/test_order_ops.lr
+Order of ops correct
+Compiling and running tests/test_os_env_read.lr
+Compiling to LLVM IR: tests/test_os_env_read.lr
+Error: Compilation failed for tests/test_os_env_read.lr. Use -debug to see details.
+Compiling and running tests/test_os_system_call.lr
+Compiling to LLVM IR: tests/test_os_system_call.lr
+Error: Compilation failed for tests/test_os_system_call.lr. Use -debug to see details.
+Compiling and running tests/test_physics_gravity.lr
+Compiling to LLVM IR: tests/test_physics_gravity.lr
+Distance fallen:
+30.656250
+Compiling and running tests/test_prime_stub.lr
+Compiling to LLVM IR: tests/test_prime_stub.lr
+Error: Compilation failed for tests/test_prime_stub.lr. Use -debug to see details.
+Compiling and running tests/test_str_case.lr
+Compiling to LLVM IR: tests/test_str_case.lr
+Error: Compilation failed for tests/test_str_case.lr. Use -debug to see details.
+Compiling and running tests/test_str_float_parse.lr
+Compiling to LLVM IR: tests/test_str_float_parse.lr
+Error: Compilation failed for tests/test_str_float_parse.lr. Use -debug to see details.
+Compiling and running tests/test_str_lib_combo.lr
+Compiling to LLVM IR: tests/test_str_lib_combo.lr
+Error: Compilation failed for tests/test_str_lib_combo.lr. Use -debug to see details.
+Compiling and running tests/test_str_reverse.lr
+Compiling to LLVM IR: tests/test_str_reverse.lr
+Error: Compilation failed for tests/test_str_reverse.lr. Use -debug to see details.
+Compiling and running tests/test_str_search.lr
+Compiling to LLVM IR: tests/test_str_search.lr
+Error: Compilation failed for tests/test_str_search.lr. Use -debug to see details.
+Compiling and running tests/test_str_types.lr
+Compiling to LLVM IR: tests/test_str_types.lr
+Error: Compilation failed for tests/test_str_types.lr. Use -debug to see details.
+Compiling and running tests/test_string_input.lr
+Compiling to LLVM IR: tests/test_string_input.lr
+Error: Compilation failed for tests/test_string_input.lr. Use -debug to see details.
+Compiling and running tests/test_struct_access.lr
+Compiling to LLVM IR: tests/test_struct_access.lr
+Error: Compilation failed for tests/test_struct_access.lr. Use -debug to see details.
+Compiling and running tests/test_struct_array.lr
+Compiling to LLVM IR: tests/test_struct_array.lr
+Error: Compilation failed for tests/test_struct_array.lr. Use -debug to see details.
+Compiling and running tests/test_struct_basic.lr
+Compiling to LLVM IR: tests/test_struct_basic.lr
+Error: Compilation failed for tests/test_struct_basic.lr. Use -debug to see details.
+Compiling and running tests/test_struct_func.lr
+Compiling to LLVM IR: tests/test_struct_func.lr
+Error: Compilation failed for tests/test_struct_func.lr. Use -debug to see details.
+Compiling and running tests/test_struct_io.lr
+Compiling to LLVM IR: tests/test_struct_io.lr
+Error: Compilation failed for tests/test_struct_io.lr. Use -debug to see details.
+Compiling and running tests/test_struct_nested.lr
+Compiling to LLVM IR: tests/test_struct_nested.lr
+Error: Compilation failed for tests/test_struct_nested.lr. Use -debug to see details.
+Compiling and running tests/test_system_echo.lr
+Compiling to LLVM IR: tests/test_system_echo.lr
+Error: Compilation failed for tests/test_system_echo.lr. Use -debug to see details.
+Compiling and running tests/test_terminal_ls.lr
+Compiling to LLVM IR: tests/test_terminal_ls.lr
+Error: Compilation failed for tests/test_terminal_ls.lr. Use -debug to see details.
+Compiling and running examples/calculation.lr
+Compiling to LLVM IR: examples/calculation.lr
+107
+93
+700
+14
+7.000000
+Compiling and running examples/hello.lr
+Compiling to LLVM IR: examples/hello.lr
+Hello, Lors!
+30
+x is smaller
+0
+1
+2
+3
+4
+Compiling and running examples/logic.lr
+Compiling to LLVM IR: examples/logic.lr
+Condition is true
+Looping...
+Looping...
+Looping...
+Loop finished
+Testing compiler flags (-oall and -iall) in flags_test...
+cd flags_test && .././lors_compiler -oall || true
+Compiling all .lr and .inc files to LLVM IR...
+Compiling to LLVM IR: main.lr
+Error: Compilation failed for main.lr. Use -debug to see details.
+cd flags_test && .././lors_compiler -iall -ns test_prog || true
+Linking all .o files...
+Executing: clang math_utils.o orphan.o -o test_prog
+/usr/bin/ld: /lib/x86_64-linux-gnu/Scrt1.o: in function `_start':
+(.text+0x1b): undefined reference to `main'
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+Error: Linking failed
+flags_test/test_prog was not created properly
+Compiling and running universal_test/test_runner.lr
+Compiling to LLVM IR: universal_test/test_runner.lr
+Error: Compilation failed for universal_test/test_runner.lr. Use -debug to see details.
+All tests finished compiling.

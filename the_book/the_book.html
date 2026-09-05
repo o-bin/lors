@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Lors Compiler Architecture Book (Stage 6)</title>
+    <style>
+
+@page {
+    size: A4;
+    margin: 20mm 20mm 20mm 20mm;
+}
+
+body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    color: #1a1a1a;
+    font-size: 11pt;
+    margin: 0;
+    padding: 0;
+}
+
+.cover-page {
+    page-break-after: always;
+    text-align: center;
+    padding-top: 150px;
+    height: 80vh;
+}
+
+.cover-title {
+    font-size: 32pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 20px;
+    line-height: 1.2;
+}
+
+.cover-subtitle {
+    font-size: 16pt;
+    color: #475569;
+    margin-bottom: 40px;
+    font-weight: 300;
+}
+
+.cover-meta {
+    font-size: 12pt;
+    color: #64748b;
+    margin-top: 100px;
+}
+
+.divider {
+    width: 100px;
+    height: 4px;
+    background-color: #2563eb;
+    margin: 30px auto;
+}
+
+h1 {
+    font-size: 20pt;
+    color: #0f172a;
+    border-bottom: 2px solid #2563eb;
+    padding-bottom: 8px;
+    margin-top: 40px;
+    page-break-before: always;
+}
+
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
+h2 {
+    font-size: 15pt;
+    color: #1e293b;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 4px;
+    margin-top: 30px;
+}
+
+h3 {
+    font-size: 12pt;
+    color: #334155;
+    margin-top: 20px;
+}
+
+p, ul, ol {
+    margin-bottom: 12px;
+}
+
+code {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 9.5pt;
+    background-color: #f1f5f9;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid #e2e8f0;
+}
+
+pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 9pt;
+    line-height: 1.45;
+    margin: 15px 0;
+    page-break-inside: avoid;
+}
+
+pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border: none;
+    font-family: 'Consolas', 'Courier New', monospace;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+}
+
+th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #cbd5e1;
+}
+
+th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+tr:nth-child(even) {
+    background-color: #f8fafc;
+}
+
+blockquote {
+    border-left: 4px solid #2563eb;
+    margin: 15px 0;
+    padding: 10px 15px;
+    background-color: #f8fafc;
+    color: #334155;
+    font-style: italic;
+}
+
+hr {
+    border: 0;
+    height: 1px;
+    background: #e2e8f0;
+    margin: 30px 0;
+}
+
+    </style>
+</head>
+<body>
+    <div class="cover-page">
+        <div class="cover-title">THE LORS COMPILER<br>ARCHITECTURE & SELF-HOSTING</div>
+        <div class="divider"></div>
+        <div class="cover-subtitle">Stage 6 LLVM Modular Compiler Specification and Engineering Handbook</div>
+        <div class="cover-meta">
+            <p><strong>Stage:</strong> Stage 6 (v6-dv)</p>
+            <p><strong>Architecture:</strong> Modular Multi-Object LLVM Native Backend</p>
+            <p><strong>Status:</strong> Autonomous Self-Hosting (Fixed-Point Point of Inflection Achieved)</p>
+            <p><strong>Test Coverage:</strong> 100% (124+ Automated Test Programs)</p>
+        </div>
+    </div>
+
+    <h1 id="the-lors-compiler-architecture-and-self-hosting-treatise-stage-6">The Lors Compiler Architecture and Self-Hosting Treatise (Stage 6)</h1>
+<p><strong>The Definitive Technical Specification, Historical Record, and Operational Handbook</strong></p>
+<hr />
+<h1 id="table-of-contents">Table of Contents</h1>
+<ul>
+<li><a href="#volume-i-the-lors-language-specification--compiler-philosophy">Volume I: The Lors Language Specification &amp; Compiler Philosophy</a></li>
+<li><a href="#chapter-1-grammar-semantics-types-and-deterministic-design-philosophy">Chapter 1: Grammar, Semantics, Types, and Deterministic Design Philosophy</a></li>
+<li><a href="#chapter-2-the-monolithic-stage-5-legacy-vs-the-stage-6-modular-revolution">Chapter 2: The Monolithic Stage 5 Legacy vs The Stage 6 Modular Revolution</a></li>
+<li><a href="#volume-ii-memory-systems-data-structures--internal-runtime">Volume II: Memory Systems, Data Structures &amp; Internal Runtime</a></li>
+<li><a href="#chapter-3-structure-of-arrays-soa-vs-array-of-structures-in-self-hosting">Chapter 3: Structure-of-Arrays (SoA) vs Array-of-Structures in Self-Hosting</a></li>
+<li><a href="#chapter-4-paged-tables-dynamic-string-serialization-and-fnv-1a-interning">Chapter 4: Paged Tables, Dynamic String Serialization, and FNV-1a Interning</a></li>
+<li><a href="#chapter-5-global-data-segments-stack-allocas-and-garbage-free-lifecycles">Chapter 5: Global Data Segments, Stack Allocas, and Garbage-Free Lifecycles</a></li>
+<li><a href="#volume-iii-frontend-architecture-lexer-preprocessor--ast">Volume III: Frontend Architecture: Lexer, Preprocessor &amp; AST</a></li>
+<li><a href="#chapter-6-the-include-resolver-visited-path-graphs-and-recursive-expansion">Chapter 6: The Include Resolver, Visited Path Graphs, and Recursive Expansion</a></li>
+<li><a href="#chapter-7-the-token-stream-state-machine-keyword-lexing-and-character-classification">Chapter 7: The Token Stream, State Machine, Keyword Lexing, and Character Classification</a></li>
+<li><a href="#chapter-8-the-abstract-syntax-tree-memory-nodes-hierarchy-and-traversal">Chapter 8: The Abstract Syntax Tree: Memory Nodes, Hierarchy, and Traversal</a></li>
+<li><a href="#chapter-9-the-ll1-recursive-descent-parser--precedence-climbing">Chapter 9: The LL(1) Recursive Descent Parser &amp; Precedence Climbing</a></li>
+<li><a href="#volume-iv-semantic-analysis-type-systems--scope-resolution">Volume IV: Semantic Analysis, Type Systems &amp; Scope Resolution</a></li>
+<li><a href="#chapter-10-multi-pass-semantic-architecture--struct-type-registration">Chapter 10: Multi-Pass Semantic Architecture &amp; Struct Type Registration</a></li>
+<li><a href="#chapter-11-lexical-scope-stacks-shadowing-and-symbol-lookup">Chapter 11: Lexical Scope Stacks, Shadowing, and Symbol Lookup</a></li>
+<li><a href="#chapter-12-the-critical-type-inference-engine-and-call-resolution-hierarchy">Chapter 12: The Critical Type Inference Engine and Call Resolution Hierarchy</a></li>
+<li><a href="#volume-v-llvm-backend-ssa-generation--native-abi">Volume V: LLVM Backend, SSA Generation &amp; Native ABI</a></li>
+<li><a href="#chapter-13-mapping-lors-to-llvm-ir-types-casts-and-instructions">Chapter 13: Mapping Lors to LLVM IR: Types, Casts, and Instructions</a></li>
+<li><a href="#chapter-14-control-flow-translation-conditionals-loops-and-terminal-blocks">Chapter 14: Control Flow Translation: Conditionals, Loops, and Terminal Blocks</a></li>
+<li><a href="#chapter-15-struct-layouts-field-geps-and-constructor-codegen">Chapter 15: Struct Layouts, Field GEPs, and Constructor Codegen</a></li>
+<li><a href="#chapter-16-system-v-x86_64-abi-calling-conventions-and-stack-alignments">Chapter 16: System V x86_64 ABI, Calling Conventions, and Stack Alignments</a></li>
+<li><a href="#chapter-17-global-variable-linkage-internal-global-common-global-and-global">Chapter 17: Global Variable Linkage: internal global, common global, and global</a></li>
+<li><a href="#chapter-18-embedded-runtime-helpers-sequences-string-slicing-and-file-io">Chapter 18: Embedded Runtime Helpers: Sequences, String Slicing, and File I/O</a></li>
+<li><a href="#volume-vi-multi-object-compilation--topological-group-linking">Volume VI: Multi-Object Compilation &amp; Topological Group Linking</a></li>
+<li><a href="#chapter-19-the-modular-compilation-pipeline-standalone-inc-to-o">Chapter 19: The Modular Compilation Pipeline: Standalone .inc to .o</a></li>
+<li><a href="#chapter-20-the-declarations-interface-declarationsinc--automatic-header-injection">Chapter 20: The Declarations Interface (declarations.inc) &amp; Automatic Header Injection</a></li>
+<li><a href="#chapter-21-topological-sorting-of-68-modules-and-cyclic-group-linking-with-clanglld">Chapter 21: Topological Sorting of 68 Modules and Cyclic Group Linking with Clang/LLD</a></li>
+<li><a href="#volume-vii-the-infinite-bootstrap--self-hosting-point-of-inflection">Volume VII: The Infinite Bootstrap &amp; Self-Hosting Point of Inflection</a></li>
+<li><a href="#chapter-22-the-bootstrap-paradox-from-stage-5-seed-to-generation-0-1-2--infinity">Chapter 22: The Bootstrap Paradox: From Stage 5 Seed to Generation 0, 1, 2, ... infinity</a></li>
+<li><a href="#chapter-23-complete-verification-suite-regression-testing-and-matrix-analysis">Chapter 23: Complete Verification Suite, Regression Testing, and Matrix Analysis</a></li>
+<li><a href="#volume-viii-the-maintainers-encyclopedia--ai-agent-transmission">Volume VIII: The Maintainer's Encyclopedia &amp; AI Agent Transmission</a></li>
+<li><a href="#chapter-24-the-golden-invariants-architectural-laws">Chapter 24: The Golden Invariants: Architectural Laws</a></li>
+<li><a href="#chapter-25-case-studies-in-debugging-every-major-bug-failure-mode-and-resolution">Chapter 25: Case Studies in Debugging: Every Major Bug, Failure Mode, and Resolution</a></li>
+<li><a href="#chapter-26-the-ai-agents-playbook-how-future-llms-must-modify-this-compiler">Chapter 26: The AI Agent's Playbook: How Future LLMs Must Modify This Compiler</a></li>
+<li><a href="#chapter-27-extending-the-compiler-adding-language-features-step-by-step">Chapter 27: Extending the Compiler: Adding Language Features Step-by-Step</a></li>
+<li><a href="#volume-ix-complete-module-reference-catalog">Volume IX: Complete Module Reference Catalog</a></li>
+<li><a href="#chapter-28-exhaustive-directory-and-file-catalog-of-all-68-compiler-modules">Chapter 28: Exhaustive Directory and File Catalog of All 68 Compiler Modules</a></li>
+</ul>
+<hr />
+<h1 id="volume-i-the-lors-language-specification-compiler-philosophy">Volume I: The Lors Language Specification &amp; Compiler Philosophy</h1>
+<h2 id="chapter-1-grammar-semantics-types-and-deterministic-design-philosophy">Chapter 1: Grammar, Semantics, Types, and Deterministic Design Philosophy</h2>
+<h3 id="11-the-philosophy-of-determinism">1.1 The Philosophy of Determinism</h3>
+<p>The Lors programming language is engineered with a strict core philosophy: <strong>absolute determinism, explicit typing, and transparent computational cost</strong>. Unlike dynamic scripting languages that introduce hidden runtime allocations or complex object lifecycles, and unlike modern C++ with hidden copy constructors and implicit template instantiations, Lors enforces a 1-to-1 correspondence between high-level syntactic constructs and generated machine instructions.</p>
+<p>In Lors:
+1. Every variable has an explicitly declared type or a deterministically inferred type tag.
+2. Memory mutation is localized, explicit, and trackable.
+3. Control flow paths are un-aliased: every branch must terminate or merge cleanly into a continuation block.
+4. Function signatures strictly specify parameter counts, argument types, and return types.</p>
+<h3 id="12-formal-lexical-grammar-keywords">1.2 Formal Lexical Grammar &amp; Keywords</h3>
+<ul>
+<li><code>algorithm</code>: Declares a procedural function or sub-routine.</li>
+<li><code>begin</code> / <code>end</code>: Demarcates the executable body block of an algorithm.</li>
+<li><code>datum</code>: Declares a typed variable binding in local or global scope.</li>
+<li><code>verify ... then ... otherwise ... conclude</code>: Structured conditional branching.</li>
+<li><code>cycle ... do ... conclude</code>: Structured deterministic iteration.</li>
+<li><code>result</code>: Returns a computed expression or exits a void function.</li>
+<li><code>reveal</code>: Formatted output to standard output stream.</li>
+<li><code>structure</code>: Defines a compound record with named, typed fields.</li>
+<li><code>incorporate</code>: Preprocessor directive for modular source file inclusion.</li>
+</ul>
+<h4 id="primitive-type-specifiers">Primitive Type Specifiers</h4>
+<ul>
+<li><code>whole</code>: 64-bit signed integer (LLVM <code>i64</code>).</li>
+<li><code>precise</code>: 64-bit double-precision IEEE 754 floating-point number (LLVM <code>double</code>).</li>
+<li><code>series</code>: Pointer to a null-terminated UTF-8 / ASCII string buffer (LLVM <code>ptr</code>).</li>
+<li><code>state</code>: 1-bit boolean truth value (LLVM <code>i1</code>), evaluating strictly to <code>true</code> or <code>false</code>.</li>
+<li><code>void</code>: Indicates that an algorithm produces no return value.</li>
+<li><code>sequence&lt;T&gt;</code>: Homogeneous dynamic array containing elements of type <code>T</code>.</li>
+<li><code>&lt;CustomStruct&gt;</code>: User-defined composite structure declared via <code>structure &lt;Name&gt;</code>.</li>
+</ul>
+<hr />
+<h1 id="volume-ii-memory-systems-data-structures-internal-runtime">Volume II: Memory Systems, Data Structures &amp; Internal Runtime</h1>
+<h2 id="chapter-3-structure-of-arrays-soa-vs-array-of-structures-in-self-hosting">Chapter 3: Structure-of-Arrays (SoA) vs Array-of-Structures in Self-Hosting</h2>
+<p>In conventional compiler architectures written in C++ or Rust, an AST node is commonly implemented as a polymorphic heap-allocated object. This Array-of-Structures (AoS) approach causes dynamic heap fragmentation and pointer aliasing hazards.</p>
+<p>Stage 6 solves this by using a pure <strong>Structure-of-Arrays (SoA)</strong> flat table architecture in <code>src/ast/ast_storage.inc</code>. An AST node is simply an integer index <code>node_id : whole</code>. Its attributes are distributed across parallel arrays (<code>ast_kinds_data</code>, <code>ast_s_vals_data</code>, <code>ast_n_vals_data</code>, <code>ast_type_tags_data</code>, <code>ast_type_names_data</code>, <code>ast_lines_data</code>, <code>ast_children_ptrs_data</code>).</p>
+<hr />
+<h1 id="volume-iii-frontend-architecture-lexer-preprocessor-ast">Volume III: Frontend Architecture: Lexer, Preprocessor &amp; AST</h1>
+<h2 id="chapter-6-the-include-resolver-cycle-detection">Chapter 6: The Include Resolver &amp; Cycle Detection</h2>
+<p>The include resolver (<code>src/preprocessor/include_resolver.inc</code>) maintains a persistent global visited registry string <code>inc_visited_str : series</code>. When <code>preprocess_file(path)</code> is called, it checks <code>inc_is_visited(path)</code>. If already visited, it returns <code>""</code> immediately; otherwise, it registers the path and recursively expands its contents, guaranteeing that every file in the modular dependency graph is included <strong>exactly once</strong>.</p>
+<hr />
+<h1 id="volume-iv-semantic-analysis-type-systems-scope-resolution">Volume IV: Semantic Analysis, Type Systems &amp; Scope Resolution</h1>
+<h2 id="chapter-12-the-critical-type-inference-engine-and-call-resolution-hierarchy">Chapter 12: The Critical Type Inference Engine and Call Resolution Hierarchy</h2>
+<h3 id="the-historical-bug">The Historical Bug</h3>
+<p>When resolving function calls, fallback prefix heuristics previously ran before checking explicit symbol declarations, causing <code>ast_init()</code> (declared as <code>void</code>) to be falsely inferred as <code>whole</code> (<code>i64</code>) due to the <code>"ast_"</code> prefix. This caused an x86_64 calling convention mismatch, corrupted the stack pointer alignment of the caller, and caused silent crashes.</p>
+<h3 id="the-canonical-solution">The Canonical Solution</h3>
+<p>In <code>src/semantic/type_checker_calls.inc</code>, the resolution order is strictly enforced:
+1. <strong>Tier 1</strong>: Struct Constructor Check (<code>struct_lookup(fname) != -1</code>).
+2. <strong>Tier 2</strong>: User-Defined Functions &amp; Header Declarations (<code>fn_lookup_ret_tag(fname)</code>).
+3. <strong>Tier 3</strong>: Primitive Builtins and Fallback Name Heuristics (<code>infer_builtin_call_type</code>).</p>
+<hr />
+<h1 id="volume-v-llvm-backend-ssa-generation-native-abi">Volume V: LLVM Backend, SSA Generation &amp; Native ABI</h1>
+<h2 id="chapter-17-global-variable-linkage-rules">Chapter 17: Global Variable Linkage Rules</h2>
+<ol>
+<li><strong><code>internal global</code></strong>: Compiler constants (<code>TOK_*</code>, <code>AST_*</code>, <code>TYPE_*</code>), private to the module, preventing link-time collisions.</li>
+<li><strong><code>common global</code></strong>: Uninitialized shared compiler state (<code>flag_debug</code>, <code>parse_pos</code>), merging into a single canonical address across all 68 object files.</li>
+<li><strong><code>global</code></strong>: Initialized module data.</li>
+<li><strong><code>external global</code></strong>: Forward reference to global state in another translation unit.</li>
+</ol>
+<hr />
+<h1 id="volume-vi-multi-object-compilation-topological-group-linking">Volume VI: Multi-Object Compilation &amp; Topological Group Linking</h1>
+<h2 id="chapter-21-topological-group-linking-link_all_modulessh">Chapter 21: Topological Group Linking (<code>link_all_modules.sh</code>)</h2>
+<p>The script <code>link_all_modules.sh</code> groups 68 objects into 9 topological tiers and uses <code>-Wl,--start-group ... -Wl,--end-group</code> to enable GNU ld / LLVM lld to iterate cyclically through the objects until all cross-module references are resolved.</p>
+<hr />
+<h1 id="volume-vii-the-infinite-bootstrap-self-hosting-point-of-inflection">Volume VII: The Infinite Bootstrap &amp; Self-Hosting Point of Inflection</h1>
+<h2 id="chapter-22-the-point-of-inflection">Chapter 22: The Point of Inflection</h2>
+<p>The Stage 6 compiler has achieved the <strong>Point of Inflection</strong>: <code>compiler_dev</code> compiles all 68 modules into <code>.o</code> files, links Generation 1 (<code>compiler_gen1</code>), which in turn compiles Generation 2 (<code>compiler_gen2</code>), running all 124 tests with a <strong>100% pass rate</strong>.</p>
+<hr />
+<h1 id="volume-viii-the-maintainers-encyclopedia-ai-agent-transmission">Volume VIII: The Maintainer's Encyclopedia &amp; AI Agent Transmission</h1>
+<h2 id="chapter-24-the-golden-invariants">Chapter 24: The Golden Invariants</h2>
+<ol>
+<li><strong>The 150-Line Limit</strong>: No <code>.inc</code> file may exceed 150 physical lines.</li>
+<li><strong>Signature Precedence</strong>: <code>fn_lookup_ret_tag</code> must always execute before fallback heuristics.</li>
+<li><strong>Global Linkage</strong>: Uninitialized variables = <code>common global</code>, Constants = <code>internal global</code>.</li>
+<li><strong>Header Synchronization</strong>: All new algorithms must be declared in <code>src/common/declarations.inc</code>.</li>
+</ol>
+<hr />
+<h1 id="volume-ix-complete-module-reference-catalog">Volume IX: Complete Module Reference Catalog</h1>
+<h2 id="chapter-28-catalog-of-all-68-modules">Chapter 28: Catalog of All 68 Modules</h2>
+<p>All 68 files categorized across:
+- <strong>Layer 1: Common</strong> (6 files)
+- <strong>Layer 2: Memory</strong> (4 files)
+- <strong>Layer 3: AST</strong> (3 files)
+- <strong>Layer 4: Preprocessor</strong> (2 files)
+- <strong>Layer 5: Lexer</strong> (5 files)
+- <strong>Layer 6: Parser</strong> (13 files)
+- <strong>Layer 7: Semantic</strong> (7 files)
+- <strong>Layer 8: Codegen</strong> (26 files)
+- <strong>Layer 9: Driver</strong> (4 files)</p>
+</body>
+</html>

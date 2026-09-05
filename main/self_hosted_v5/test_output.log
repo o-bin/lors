@@ -1,0 +1,373 @@
+mkdir -p tests
+cp -r ../lors/tests/* tests/ || true
+mkdir -p examples
+cp -r ../lors/examples/* examples/ || true
+mkdir -p flags_test
+cp -r ../flags_test/* flags_test/ || true
+rm -f flags_test/*.o
+mkdir -p universal_test
+cp -r ../universal_test/* universal_test/ || true
+# Since LLVM backend is a proof of concept, we just compile them.
+# Full runtime semantics are not yet fully implemented (arrays, all math ops, etc)
+# This demonstrates that the compiler can parse and generate LLVM IR.
+Compiling and running tests/edge_cases.lr
+Compiling to LLVM IR: tests/edge_cases.lr
+DEBUG: generate_code called
+120
+Factorial correct
+Compiling and running tests/test_adv_math_io.lr
+Compiling to LLVM IR: tests/test_adv_math_io.lr
+DEBUG: generate_code called
+78.539750
+Compiling and running tests/test_array_access.lr
+Compiling to LLVM IR: tests/test_array_access.lr
+DEBUG: generate_code called
+20
+Compiling and running tests/test_array_decl.lr
+Compiling to LLVM IR: tests/test_array_decl.lr
+DEBUG: generate_code called
+Compiling and running tests/test_array_file_io.lr
+Compiling to LLVM IR: tests/test_array_file_io.lr
+DEBUG: generate_code called
+1, 2, 3
+Compiling and running tests/test_array_modify.lr
+Compiling to LLVM IR: tests/test_array_modify.lr
+DEBUG: generate_code called
+99
+2
+198
+6
+Compiling and running tests/test_array_no_mod_yet.lr
+Compiling to LLVM IR: tests/test_array_no_mod_yet.lr
+DEBUG: generate_code called
+Compiling and running tests/test_bool_logic_complex.lr
+Compiling to LLVM IR: tests/test_bool_logic_complex.lr
+DEBUG: generate_code called
+Complex logic pass
+Negation pass
+Compiling and running tests/test_calculator.lr
+Compiling to LLVM IR: tests/test_calculator.lr
+DEBUG: generate_code called
+Enter operation (1=add, 2=sub, 3=mul, 4=div):
+Enter first number:
+Enter second number:
+Unknown operation
+Result:
+0.000000
+Compiling and running tests/test_chain_add.lr
+Compiling to LLVM IR: tests/test_chain_add.lr
+DEBUG: generate_code called
+6.000000
+Compiling and running tests/test_chemistry_molar.lr
+Compiling to LLVM IR: tests/test_chemistry_molar.lr
+DEBUG: generate_code called
+Mass of water:
+36.030000
+Compiling and running tests/test_cli_args_basic.lr
+Compiling to LLVM IR: tests/test_cli_args_basic.lr
+DEBUG: generate_code called
+1
+./tests/test_cli_args_basic
+Compiling and running tests/test_cli_args_usage.lr
+Compiling to LLVM IR: tests/test_cli_args_usage.lr
+DEBUG: generate_code called
+No args provided
+Compiling and running tests/test_empty_array.lr
+Compiling to LLVM IR: tests/test_empty_array.lr
+DEBUG: generate_code called
+Compiling and running tests/test_even_odd.lr
+Compiling to LLVM IR: tests/test_even_odd.lr
+DEBUG: generate_code called
+Even
+Compiling and running tests/test_factorial.lr
+Compiling to LLVM IR: tests/test_factorial.lr
+DEBUG: generate_code called
+120
+Compiling and running tests/test_fibonacci.lr
+Compiling to LLVM IR: tests/test_fibonacci.lr
+DEBUG: generate_code called
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+Compiling and running tests/test_file_custom_ext.lr
+Compiling to LLVM IR: tests/test_file_custom_ext.lr
+DEBUG: generate_code called
+key=value
+Compiling and running tests/test_file_write_read.lr
+Compiling to LLVM IR: tests/test_file_write_read.lr
+DEBUG: generate_code called
+Hello File I/O
+File read/write successful
+Compiling and running tests/test_float_ops.lr
+Compiling to LLVM IR: tests/test_float_ops.lr
+DEBUG: generate_code called
+9.500000
+Compiling and running tests/test_fs_delete_file.lr
+Compiling to LLVM IR: tests/test_fs_delete_file.lr
+DEBUG: generate_code called
+File deleted
+Compiling and running tests/test_fs_exists_check.lr
+Compiling to LLVM IR: tests/test_fs_exists_check.lr
+DEBUG: generate_code called
+File exists
+Compiling and running tests/test_fs_io_flow.lr
+Compiling to LLVM IR: tests/test_fs_io_flow.lr
+DEBUG: generate_code called
+Step 1 OK
+Step 2 OK
+Step 3 OK
+Compiling and running tests/test_hypotenuse.lr
+Compiling to LLVM IR: tests/test_hypotenuse.lr
+DEBUG: generate_code called
+3.535534
+Compiling and running tests/test_inc_a.lr
+Compiling to LLVM IR: tests/test_inc_a.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_inc_a.lr. Use -debug to see details.
+Compiling and running tests/test_is_alnum.lr
+Compiling to LLVM IR: tests/test_is_alnum.lr
+DEBUG: generate_code called
+A is alnum
+2 is alnum
+! is not alnum
+Compiling and running tests/test_logic_and.lr
+Compiling to LLVM IR: tests/test_logic_and.lr
+DEBUG: generate_code called
+Correct
+Compiling and running tests/test_logic_mixed.lr
+Compiling to LLVM IR: tests/test_logic_mixed.lr
+DEBUG: generate_code called
+Correct
+Compiling and running tests/test_logic_not.lr
+Compiling to LLVM IR: tests/test_logic_not.lr
+DEBUG: generate_code called
+Correct
+Compiling and running tests/test_logic_or.lr
+Compiling to LLVM IR: tests/test_logic_or.lr
+DEBUG: generate_code called
+Correct
+Compiling and running tests/test_loop_sum.lr
+Compiling to LLVM IR: tests/test_loop_sum.lr
+DEBUG: generate_code called
+10
+Compiling and running tests/test_math_abs.lr
+Compiling to LLVM IR: tests/test_math_abs.lr
+DEBUG: generate_code called
+-10.500000
+Compiling and running tests/test_math_pi.lr
+Compiling to LLVM IR: tests/test_math_pi.lr
+DEBUG: generate_code called
+-1.000000
+Compiling and running tests/test_math_pow.lr
+Compiling to LLVM IR: tests/test_math_pow.lr
+DEBUG: generate_code called
+8.000000
+Compiling and running tests/test_math_root.lr
+Compiling to LLVM IR: tests/test_math_root.lr
+DEBUG: generate_code called
+4.000000
+Compiling and running tests/test_math_trig.lr
+Compiling to LLVM IR: tests/test_math_trig.lr
+DEBUG: generate_code called
+0.000000
+1.000000
+Compiling and running tests/test_mixed_parsing.lr
+Compiling to LLVM IR: tests/test_mixed_parsing.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_mixed_parsing.lr. Use -debug to see details.
+Compiling and running tests/test_nested_logic_advanced.lr
+Compiling to LLVM IR: tests/test_nested_logic_advanced.lr
+DEBUG: generate_code called
+Deep nesting pass
+Compiling and running tests/test_nested_loops.lr
+Compiling to LLVM IR: tests/test_nested_loops.lr
+DEBUG: generate_code called
+0
+1
+10
+11
+20
+21
+Compiling and running tests/test_nested_verify.lr
+Compiling to LLVM IR: tests/test_nested_verify.lr
+DEBUG: generate_code called
+Inside range
+Compiling and running tests/test_order_ops.lr
+Compiling to LLVM IR: tests/test_order_ops.lr
+DEBUG: generate_code called
+Order of ops correct
+Compiling and running tests/test_os_env_read.lr
+Compiling to LLVM IR: tests/test_os_env_read.lr
+DEBUG: generate_code called
+Segmentation fault
+Compiling and running tests/test_os_system_call.lr
+Compiling to LLVM IR: tests/test_os_system_call.lr
+DEBUG: generate_code called
+OS Call
+Compiling and running tests/test_physics_gravity.lr
+Compiling to LLVM IR: tests/test_physics_gravity.lr
+DEBUG: generate_code called
+Distance fallen:
+30.656250
+Compiling and running tests/test_prime_stub.lr
+Compiling to LLVM IR: tests/test_prime_stub.lr
+DEBUG: generate_code called
+1
+Compiling and running tests/test_str_case.lr
+Compiling to LLVM IR: tests/test_str_case.lr
+DEBUG: generate_code called
+HELLO 123
+hello 123
+Case Pass
+Compiling and running tests/test_str_float_parse.lr
+Compiling to LLVM IR: tests/test_str_float_parse.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_str_float_parse.lr. Use -debug to see details.
+Compiling and running tests/test_str_lib_combo.lr
+Compiling to LLVM IR: tests/test_str_lib_combo.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_str_lib_combo.lr. Use -debug to see details.
+Compiling and running tests/test_str_reverse.lr
+Compiling to LLVM IR: tests/test_str_reverse.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_str_reverse.lr. Use -debug to see details.
+Compiling and running tests/test_str_search.lr
+Compiling to LLVM IR: tests/test_str_search.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_str_search.lr. Use -debug to see details.
+Compiling and running tests/test_str_types.lr
+Compiling to LLVM IR: tests/test_str_types.lr
+DEBUG: generate_code called
+Error: Compilation failed for tests/test_str_types.lr. Use -debug to see details.
+Compiling and running tests/test_string_input.lr
+Compiling to LLVM IR: tests/test_string_input.lr
+DEBUG: generate_code called
+Enter a word:
+You typed:
+
+Compiling and running tests/test_struct_access.lr
+Compiling to LLVM IR: tests/test_struct_access.lr
+DEBUG: generate_code called
+100
+50
+Struct Modify Pass
+Compiling and running tests/test_struct_array.lr
+Compiling to LLVM IR: tests/test_struct_array.lr
+DEBUG: generate_code called
+1
+2
+Struct Array Pass
+Compiling and running tests/test_struct_basic.lr
+Compiling to LLVM IR: tests/test_struct_basic.lr
+DEBUG: generate_code called
+10
+20
+Struct Basic Pass
+Compiling and running tests/test_struct_func.lr
+Compiling to LLVM IR: tests/test_struct_func.lr
+DEBUG: generate_code called
+4
+6
+Struct Func Pass
+Compiling and running tests/test_struct_io.lr
+Compiling to LLVM IR: tests/test_struct_io.lr
+DEBUG: generate_code called
+localhost:8080
+Compiling and running tests/test_struct_nested.lr
+Compiling to LLVM IR: tests/test_struct_nested.lr
+DEBUG: generate_code called
+42
+Struct Nested Pass
+Compiling and running tests/test_system_echo.lr
+Compiling to LLVM IR: tests/test_system_echo.lr
+DEBUG: generate_code called
+System command works
+Compiling and running tests/test_terminal_ls.lr
+Compiling to LLVM IR: tests/test_terminal_ls.lr
+DEBUG: generate_code called
+total 1296
+drwxrwxr-x  7 jules jules   4096 Mar 11 17:23 .
+drwxr-xr-x 10 jules root    4096 Mar 11 17:18 ..
+-rw-rw-r--  1 jules jules   3291 Mar 11 17:18 FIX.md
+-rw-rw-r--  1 jules jules   2245 Mar 11 17:18 Makefile
+-rw-rw-r--  1 jules jules    151 Mar 11 17:18 build_log.txt
+-rw-rw-r--  1 jules jules  85294 Mar 11 17:18 combined.lr
+-rw-rw-r--  1 jules jules  94776 Mar 11 17:18 combined_debug.lr
+drwxrwxr-x  2 jules jules   4096 Mar 11 17:22 examples
+drwxrwxr-x  2 jules jules   4096 Mar 11 17:22 flags_test
+-rwxrwxr-x  1 jules jules 330176 Mar 11 17:22 lors_compiler
+-rw-rw-r--  1 jules jules   8892 Mar 11 17:18 lors_compiler.lr
+-rw-rw-r--  1 jules jules 674528 Mar 11 17:22 lors_compiler.o
+drwxrwxr-x  2 jules jules   4096 Mar 11 17:22 self_compiler
+-rw-rw-r--  1 jules jules   1815 Mar 11 17:18 test_execution.log
+-rw-rw-r--  1 jules jules   1893 Mar 11 17:18 test_full_results.log
+-rw-rw-r--  1 jules jules    476 Mar 11 17:18 test_include.lr
+-rwxrwxr-x  1 jules jules  16720 Mar 11 17:18 test_inquire_simple
+-rw-rw-r--  1 jules jules    101 Mar 11 17:18 test_inquire_simple.lr
+-rw-rw-r--  1 jules jules   9445 Mar 11 17:23 test_output.log
+-rw-rw-r--  1 jules jules  10730 Mar 11 17:18 test_results.log
+-rw-rw-r--  1 jules jules  10457 Mar 11 17:18 test_results2.log
+drwxrwxr-x  2 jules jules  12288 Mar 11 17:23 tests
+drwxrwxr-x  2 jules jules   4096 Mar 11 17:22 universal_test
+Compiling and running examples/calculation.lr
+Compiling to LLVM IR: examples/calculation.lr
+DEBUG: generate_code called
+107
+93
+700
+14
+7.000000
+Compiling and running examples/hello.lr
+Compiling to LLVM IR: examples/hello.lr
+DEBUG: generate_code called
+Hello, Lors!
+30
+x is smaller
+0
+1
+2
+3
+4
+Compiling and running examples/logic.lr
+Compiling to LLVM IR: examples/logic.lr
+DEBUG: generate_code called
+Condition is true
+Looping...
+Looping...
+Looping...
+Loop finished
+Testing compiler flags (-oall and -iall) in flags_test...
+cd flags_test && .././lors_compiler -oall || true
+Compiling all .lr and .inc files to LLVM IR...
+Compiling to LLVM IR: main.lr
+DEBUG: generate_code called
+Found corresponding .lr for math_utils.inc, compiling math_utils.lr
+Compiling to LLVM IR: math_utils.lr
+DEBUG: generate_code called
+Compiling to LLVM IR: math_utils.lr
+DEBUG: generate_code called
+Generating wrapper for orphan orphan.inc
+Compiling to LLVM IR: wrapper_orphan.lr
+DEBUG: generate_code called
+cd flags_test && .././lors_compiler -iall -ns test_prog || true
+Linking all .o files...
+Executing: clang main.o math_utils.o orphan.o -o test_prog
+Success: Created test_prog
+Running flags_test/test_prog
+Testing Math Utils...
+Sum: 15
+Product: 50
+Square: 100
+Test Passed!
+Compiling and running universal_test/test_runner.lr
+Compiling to LLVM IR: universal_test/test_runner.lr
+DEBUG: generate_code called
+Error: Compilation failed for universal_test/test_runner.lr. Use -debug to see details.
+All tests finished compiling.

@@ -1,0 +1,6 @@
+algorithm genesis() -> whole
+begin
+    // Invalid type usage to cause backend clang error
+    datum bad_var : whole = "This is a string";
+    result 0;
+end

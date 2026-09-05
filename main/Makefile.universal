@@ -1,0 +1,73 @@
+# Makefile for Universal Testing and Compilation
+
+# Compilers
+BOOTSTRAP_COMPILER = ./twin
+NEW_COMPILER_BIN = ./self_compiler_s/compiler
+NEW_COMPILER_SRC = self_compiler_s/lors_bootstrap.lr
+
+# Directories
+TEST_DIRS = lors/tests lors/examples test_v2
+
+# Build Targets
+.PHONY: all clean build_compiler test_universal
+
+# 1. Build the new self-hosted compiler using the bootstrap compiler
+build_compiler: $(NEW_COMPILER_BIN)
+
+$(NEW_COMPILER_BIN): $(NEW_COMPILER_SRC)
+	@echo "Building New Self-Compiler..."
+	$(BOOTSTRAP_COMPILER) $(NEW_COMPILER_SRC)
+	mv self_compiler_s/lors_bootstrap $(NEW_COMPILER_BIN)
+
+# 2. Run the Universal Test Suite (Raw Style Matching Original)
+test_universal: build_compiler
+	@failed=0; \
+	for dir in $(TEST_DIRS); do \
+		for src in $$(find $$dir -maxdepth 1 -name "*.lr" | sort); do \
+			if echo "$$src" | grep -q "\.inc"; then continue; fi; \
+			\
+			# Compile \
+			$(NEW_COMPILER_BIN) $$src -s > /dev/null 2>&1; \
+			if [ $$? -ne 0 ]; then \
+				echo "COMPILATION FAILED: $$src"; \
+				failed=1; \
+				continue; \
+			fi; \
+			\
+			exe=$${src%.lr}; \
+			echo ""; \
+			echo "--- Ejecutando: $$exe ---"; \
+			\
+			# Execute \
+			if echo "$$exe" | grep -q "test_calculator"; then \
+				echo "Entrada simulada: 1, 10, 20"; \
+				printf "1\n10\n20\n" | ./$$exe; \
+			elif echo "$$exe" | grep -q "test_string_input"; then \
+				echo "Entrada simulada: HelloInput"; \
+				printf "HelloInput\n" | ./$$exe; \
+			elif echo "$$exe" | grep -q "test_cli_args_basic"; then \
+				echo "Argumentos CLI: arg1 arg2"; \
+				./$$exe arg1 arg2; \
+			elif echo "$$exe" | grep -q "test_cli_args_usage"; then \
+				echo "Argumentos CLI: myargument"; \
+				./$$exe myargument; \
+			else \
+				./$$exe; \
+			fi; \
+			\
+			if [ $$? -ne 0 ]; then \
+				echo "EXECUTION FAILED: $$exe"; \
+				failed=1; \
+			fi; \
+			rm -f $$exe $$exe.cpp; \
+		done; \
+	done; \
+	if [ $$failed -ne 0 ]; then \
+		exit 1; \
+	fi
+
+# Cleanup
+clean:
+	rm -f $(NEW_COMPILER_BIN) $(NEW_COMPILER_BIN).cpp
+	rm -f universal_test/test_runner universal_test/test_runner.cpp
+	rm -f universal_test_output.txt

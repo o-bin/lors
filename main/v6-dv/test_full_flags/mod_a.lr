@@ -1,0 +1,4 @@
+algorithm calculate_multiplier(x : whole, y : whole) -> whole
+begin
+    result x * y + 10;
+end

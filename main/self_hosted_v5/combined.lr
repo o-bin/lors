@@ -1,0 +1,2299 @@
+// Token Types (Constants)
+datum TOKEN_EOF : whole = 0;
+
+// Keywords
+datum TOKEN_DATUM : whole = 1;
+datum TOKEN_VERIFY : whole = 2;
+datum TOKEN_THEN : whole = 3;
+datum TOKEN_OTHERWISE : whole = 4;
+datum TOKEN_CONCLUDE : whole = 5;
+datum TOKEN_CYCLE : whole = 6;
+datum TOKEN_DO : whole = 7;
+datum TOKEN_ALGORITHM : whole = 8;
+datum TOKEN_BEGIN : whole = 9;
+datum TOKEN_END : whole = 10;
+datum TOKEN_RESULT : whole = 11;
+datum TOKEN_REVEAL : whole = 12;
+datum TOKEN_INQUIRE : whole = 13;
+datum TOKEN_INCORPORATE : whole = 14;
+datum TOKEN_STRUCTURE : whole = 15;
+datum TOKEN_AND : whole = 16;
+datum TOKEN_OR : whole = 17;
+datum TOKEN_NOT : whole = 18;
+
+// Types
+datum TOKEN_TYPE_WHOLE : whole = 19;
+datum TOKEN_TYPE_PRECISE : whole = 20;
+datum TOKEN_TYPE_SERIES : whole = 21;
+datum TOKEN_TYPE_STATE : whole = 22;
+datum TOKEN_TYPE_SEQUENCE : whole = 23;
+
+// Literals
+datum TOKEN_INTEGER_LITERAL : whole = 24;
+datum TOKEN_FLOAT_LITERAL : whole = 25;
+datum TOKEN_STRING_LITERAL : whole = 26;
+datum TOKEN_BOOLEAN_LITERAL : whole = 27;
+
+// Identifier
+datum TOKEN_IDENTIFIER : whole = 28;
+
+// Operators & Punctuation
+datum TOKEN_PLUS : whole = 29;
+datum TOKEN_MINUS : whole = 30;
+datum TOKEN_STAR : whole = 31;
+datum TOKEN_SLASH : whole = 32;
+datum TOKEN_MODULO : whole = 33;
+datum TOKEN_ASSIGN : whole = 34;
+datum TOKEN_DOT : whole = 35;
+datum TOKEN_COLON : whole = 36;
+datum TOKEN_SEMICOLON : whole = 37;
+datum TOKEN_COMMA : whole = 38;
+datum TOKEN_LPAREN : whole = 39;
+datum TOKEN_RPAREN : whole = 40;
+datum TOKEN_LBRACKET : whole = 41;
+datum TOKEN_RBRACKET : whole = 42;
+datum TOKEN_GT : whole = 43;
+datum TOKEN_LT : whole = 44;
+datum TOKEN_EQ : whole = 45;
+datum TOKEN_ARROW : whole = 46;
+datum TOKEN_GE : whole = 47;
+datum TOKEN_LE : whole = 48;
+datum TOKEN_NEQ : whole = 49;
+
+structure Token begin
+    datum type : whole;
+    datum value : series;
+    datum line : whole;
+    datum column : whole;
+end
+// AST Node Kinds
+datum NODE_PROGRAM : whole = 1;
+datum NODE_VAR_DECL : whole = 2;
+datum NODE_FUNC_DECL : whole = 3;
+datum NODE_STRUCT_DECL : whole = 4;
+datum NODE_BLOCK : whole = 5;
+datum NODE_IF : whole = 6;
+datum NODE_WHILE : whole = 7;
+datum NODE_RETURN : whole = 8;
+datum NODE_EXPR_STMT : whole = 9;
+datum NODE_ASSIGN : whole = 10;
+datum NODE_ARRAY_ASSIGN : whole = 11;
+datum NODE_MEMBER_ASSIGN : whole = 12;
+
+datum NODE_BINARY_OP : whole = 20;
+datum NODE_LITERAL : whole = 21;
+datum NODE_IDENTIFIER : whole = 22;
+datum NODE_FUNC_CALL : whole = 23;
+datum NODE_ARRAY_LITERAL : whole = 24;
+datum NODE_ARRAY_ACCESS : whole = 25;
+datum NODE_MEMBER_ACCESS : whole = 26;
+datum NODE_INQUIRE : whole = 27;
+
+datum NODE_TYPE : whole = 30;
+datum NODE_PARAM : whole = 31;
+
+structure ASTNode begin
+    datum kind : whole = 0;
+
+    // Type Propagation
+    datum resolved_type : series = "";
+
+    // For Identifier, Literal (series), FuncCall name, Struct name, etc.
+    datum text_val : series = "";
+
+    // For Literals
+    datum int_val : whole = 0;
+    datum float_val : precise = 0.0;
+    datum bool_val : state = false;
+    datum value_type : series = ""; // "whole", "precise" etc.
+
+    // BinaryOp, Assignment
+    datum left : whole = -1;
+    datum right : whole = -1;
+    datum op : series = ""; // Renamed from operator
+
+    // If, While
+    datum condition : whole = -1;
+    datum then_branch : whole = -1; // Also used for Block in FuncDecl
+    datum else_branch : whole = -1;
+
+    // Declarations
+    datum type_node : whole = -1; // Var type, Return type
+    datum initializer : whole = -1;
+
+    // TypeNode
+    datum subtype : whole = -1;
+
+    // Children list (Statements in Block, Params in Func, Fields in Struct, Args in Call, Elements in Array)
+    datum children : sequence<whole>;
+end
+
+// Global Heap for AST Nodes
+datum node_heap : sequence<ASTNode>;
+
+algorithm create_node(kind : whole) -> whole
+begin
+    datum idx : whole = length(node_heap);
+    // Initialize a new node
+    datum node : ASTNode;
+    node.kind = kind;
+    append(node_heap, node);
+    result idx;
+end
+// Symbol Table and Type Inference
+datum sym_names : sequence<series>;
+datum sym_types : sequence<series>;
+datum sym_scopes : sequence<whole>;
+datum current_scope : whole = 0;
+
+datum func_names : sequence<series>;
+datum func_ret_types : sequence<series>;
+
+algorithm push_scope() -> void
+begin
+    current_scope = current_scope + 1;
+end
+
+algorithm pop_scope() -> void
+begin
+    // Remove symbols from the current scope
+    datum i : whole = length(sym_names) - 1;
+    cycle (i >= 0 and sym_scopes[i] == current_scope) do
+        // Pop elements
+        datum new_names : sequence<series>;
+        datum new_types : sequence<series>;
+        datum new_scopes : sequence<whole>;
+        datum j : whole = 0;
+        cycle (j < i) do
+            append(new_names, sym_names[j]);
+            append(new_types, sym_types[j]);
+            append(new_scopes, sym_scopes[j]);
+            j = j + 1;
+        conclude
+        sym_names = new_names;
+        sym_types = new_types;
+        sym_scopes = new_scopes;
+        i = i - 1;
+    conclude
+    current_scope = current_scope - 1;
+end
+
+algorithm add_symbol(name : series, type : series) -> void
+begin
+    append(sym_names, name);
+    append(sym_types, type);
+    append(sym_scopes, current_scope);
+end
+
+algorithm get_symbol_type(name : series) -> series
+begin
+    datum i : whole = length(sym_names) - 1;
+    cycle (i >= 0) do
+        verify (sym_names[i] == name) then
+            result sym_types[i];
+        conclude
+        i = i - 1;
+    conclude
+
+    // Check if it's a global function (first class citizens?)
+    // Actually, functions might be stored separately.
+    result "unknown";
+end
+
+algorithm add_func(name : series, ret_type : series) -> void
+begin
+    append(func_names, name);
+    append(func_ret_types, ret_type);
+end
+
+algorithm get_func_ret_type(name : series) -> series
+begin
+    datum i : whole = length(func_names) - 1;
+    cycle (i >= 0) do
+        verify (func_names[i] == name) then
+            result func_ret_types[i];
+        conclude
+        i = i - 1;
+    conclude
+    result "unknown";
+end
+
+// Forward declaration
+algorithm map_type_node(node_idx : whole) -> series;
+
+// Helper to retrieve previously propagated type during codegen phase
+algorithm get_expr_type(node_idx : whole) -> series
+begin
+    verify (node_idx == -1) then result "void"; conclude
+    datum node : ASTNode = node_heap[node_idx];
+    verify (node.resolved_type != "") then result node.resolved_type; conclude
+
+    datum k : whole = node.kind;
+
+    verify (k == NODE_LITERAL) then
+        verify (node.value_type == "whole") then result "i64"; conclude
+        verify (node.value_type == "precise") then result "double"; conclude
+        verify (node.value_type == "series") then result "ptr"; conclude
+        verify (node.value_type == "state") then result "i1"; conclude
+        result "i64"; // Default
+    conclude
+
+    verify (k == NODE_IDENTIFIER) then
+        datum t : series = get_symbol_type(node.text_val);
+        verify (t != "unknown") then result t; conclude
+        result "i64"; // Default fallback
+    conclude
+
+    verify (k == NODE_BINARY_OP) then
+        datum op : series = node.op;
+        datum lt : series = get_expr_type(node.left);
+        datum rt : series = get_expr_type(node.right);
+
+        // Logical
+        datum is_logical_op : state = false;
+        verify (op == "and") then is_logical_op = true; conclude
+        verify (op == "or") then is_logical_op = true; conclude
+        verify (op == "==") then is_logical_op = true; conclude
+        verify (op == "!=") then is_logical_op = true; conclude
+        verify (op == "<") then is_logical_op = true; conclude
+        verify (op == ">") then is_logical_op = true; conclude
+        verify (op == "<=") then is_logical_op = true; conclude
+        verify (op == ">=") then is_logical_op = true; conclude
+
+        verify (is_logical_op) then
+            result "i1";
+        conclude
+
+        // Math / string concatenation
+        datum is_ptr_op : state = false;
+        verify (lt == "ptr") then is_ptr_op = true; conclude
+        verify (rt == "ptr") then is_ptr_op = true; conclude
+        verify (is_ptr_op) then result "ptr"; conclude // String concatenation
+
+        datum is_dbl_op : state = false;
+        verify (lt == "double") then is_dbl_op = true; conclude
+        verify (rt == "double") then is_dbl_op = true; conclude
+        verify (is_dbl_op) then result "double"; conclude
+
+        result "i64";
+    conclude
+
+    verify (k == NODE_FUNC_CALL) then
+        datum fname : series = node.text_val;
+
+        // Built-ins
+        datum is_str_fn : state = false;
+        verify (fname == "to_string") then is_str_fn = true; conclude
+        verify (fname == "substring") then is_str_fn = true; conclude
+        verify (fname == "to_upper") then is_str_fn = true; conclude
+        verify (fname == "to_lower") then is_str_fn = true; conclude
+        verify (fname == "reverse") then is_str_fn = true; conclude
+        verify (fname == "character") then is_str_fn = true; conclude
+        verify (fname == "file_read") then is_str_fn = true; conclude
+        verify (fname == "env_get") then is_str_fn = true; conclude
+        verify (fname == "arg_value") then is_str_fn = true; conclude
+
+        datum is_dbl_fn : state = false;
+        verify (fname == "power") then is_dbl_fn = true; conclude
+        verify (fname == "root") then is_dbl_fn = true; conclude
+        verify (fname == "sine") then is_dbl_fn = true; conclude
+        verify (fname == "cosine") then is_dbl_fn = true; conclude
+        verify (fname == "tangent") then is_dbl_fn = true; conclude
+        verify (fname == "absolute") then is_dbl_fn = true; conclude
+        verify (fname == "to_precise") then is_dbl_fn = true; conclude
+
+        datum is_bool_fn : state = false;
+        verify (fname == "file_exists") then is_bool_fn = true; conclude
+        verify (fname == "is_digit") then is_bool_fn = true; conclude
+        verify (fname == "is_alpha") then is_bool_fn = true; conclude
+        verify (fname == "is_alnum") then is_bool_fn = true; conclude
+        verify (fname == "is_space") then is_bool_fn = true; conclude
+        verify (fname == "is_upper") then is_bool_fn = true; conclude
+        verify (fname == "is_lower") then is_bool_fn = true; conclude
+
+        datum is_int_fn : state = false;
+        verify (fname == "length") then is_int_fn = true; conclude
+        verify (fname == "to_integer") then is_int_fn = true; conclude
+        verify (fname == "arg_count") then is_int_fn = true; conclude
+        verify (fname == "char_at") then is_int_fn = true; conclude
+
+        verify (is_str_fn) then result "ptr"; conclude
+        verify (is_dbl_fn) then result "double"; conclude
+        verify (is_bool_fn) then result "i1"; conclude
+        verify (is_int_fn) then result "i64"; conclude
+
+        datum t : series = get_func_ret_type(fname);
+        verify (t != "unknown") then result t; conclude
+        result "i64";
+    conclude
+
+    verify (k == NODE_ARRAY_ACCESS) then
+        // If it's an array, it's a pointer to the sub-type
+        datum arr_t : series = get_expr_type(node.left);
+        // E.g. "ptr" -> "i64"
+        verify (substring(arr_t, length(arr_t) - 1, 1) == "*") then
+            result substring(arr_t, 0, length(arr_t) - 1);
+        conclude
+        result "i64";
+    conclude
+
+    verify (k == NODE_MEMBER_ACCESS) then
+        // Complex to track without struct definitions in type table.
+        // We'll need a struct_fields table, but for now fallback to i64.
+        // Actually, we must track struct types.
+        result "i64";
+    conclude
+
+    result "i64";
+end
+
+// --- AST Type Propagation Pass ---
+
+algorithm type_error(msg : series) -> void
+begin
+    reveal("Type Error: " + msg);
+    exit_program(1);
+end
+
+algorithm propagate_type(node_idx : whole) -> series
+begin
+    verify (node_idx == -1) then result "void"; conclude
+
+    datum node : ASTNode = node_heap[node_idx];
+    datum k : whole = node.kind;
+
+    verify (node.resolved_type != "") then
+        result node.resolved_type;
+    conclude
+
+    datum res_type : series = "void";
+
+    verify (k == NODE_LITERAL) then
+        verify (node.value_type == "whole") then res_type = "i64"; conclude
+        verify (node.value_type == "precise") then res_type = "double"; conclude
+        verify (node.value_type == "series") then res_type = "ptr"; conclude
+        verify (node.value_type == "state") then res_type = "i1"; conclude
+    conclude
+
+    verify (k == NODE_IDENTIFIER) then
+        res_type = get_symbol_type(node.text_val);
+        verify (res_type == "unknown") then
+            // Check if it's a function name
+            res_type = get_func_ret_type(node.text_val);
+            verify (res_type == "unknown") then
+                type_error("Undeclared identifier: " + node.text_val);
+            conclude
+        conclude
+    conclude
+
+    verify (k == NODE_BINARY_OP) then
+        datum lt : series = propagate_type(node.left);
+        datum rt : series = propagate_type(node.right);
+
+        datum op : series = node.op;
+        datum is_logical_op : state = false;
+        verify (op == "and") then is_logical_op = true; conclude
+        verify (op == "or") then is_logical_op = true; conclude
+        verify (op == "==") then is_logical_op = true; conclude
+        verify (op == "!=") then is_logical_op = true; conclude
+        verify (op == "<") then is_logical_op = true; conclude
+        verify (op == ">") then is_logical_op = true; conclude
+        verify (op == "<=") then is_logical_op = true; conclude
+        verify (op == ">=") then is_logical_op = true; conclude
+
+        datum is_ptr_op : state = false;
+        verify (lt == "ptr") then is_ptr_op = true; conclude
+        verify (rt == "ptr") then is_ptr_op = true; conclude
+
+        datum is_dbl_op : state = false;
+        verify (lt == "double") then is_dbl_op = true; conclude
+        verify (rt == "double") then is_dbl_op = true; conclude
+
+        res_type = "i64";
+        verify (is_dbl_op) then res_type = "double"; conclude
+        verify (is_ptr_op) then res_type = "ptr"; conclude
+        verify (is_logical_op) then res_type = "i1"; conclude
+    conclude
+
+    verify (k == NODE_FUNC_CALL) then
+        // Resolve arguments first
+        datum i : whole = 0;
+        datum len : whole = length(node.children);
+        cycle (i < len) do
+            propagate_type(node.children[i]);
+            i = i + 1;
+        conclude
+
+        datum fname : series = node.text_val;
+
+        // Built-ins
+        datum is_str_fn : state = false;
+        verify (fname == "to_string") then is_str_fn = true; conclude
+        verify (fname == "substring") then is_str_fn = true; conclude
+        verify (fname == "to_upper") then is_str_fn = true; conclude
+        verify (fname == "to_lower") then is_str_fn = true; conclude
+        verify (fname == "reverse") then is_str_fn = true; conclude
+        verify (fname == "character") then is_str_fn = true; conclude
+        verify (fname == "file_read") then is_str_fn = true; conclude
+        verify (fname == "env_get") then is_str_fn = true; conclude
+        verify (fname == "arg_value") then is_str_fn = true; conclude
+
+        datum is_int_fn : state = false;
+        verify (fname == "length") then is_int_fn = true; conclude
+        verify (fname == "to_integer") then is_int_fn = true; conclude
+        verify (fname == "arg_count") then is_int_fn = true; conclude
+        verify (fname == "char_at") then is_int_fn = true; conclude
+
+        datum is_dbl_fn : state = false;
+        verify (fname == "power") then is_dbl_fn = true; conclude
+        verify (fname == "root") then is_dbl_fn = true; conclude
+        verify (fname == "sine") then is_dbl_fn = true; conclude
+        verify (fname == "cosine") then is_dbl_fn = true; conclude
+        verify (fname == "tangent") then is_dbl_fn = true; conclude
+        verify (fname == "absolute") then is_dbl_fn = true; conclude
+        verify (fname == "to_precise") then is_dbl_fn = true; conclude
+
+        datum is_bool_fn : state = false;
+        verify (fname == "file_exists") then is_bool_fn = true; conclude
+        verify (fname == "is_digit") then is_bool_fn = true; conclude
+        verify (fname == "is_alpha") then is_bool_fn = true; conclude
+        verify (fname == "is_alnum") then is_bool_fn = true; conclude
+        verify (fname == "is_space") then is_bool_fn = true; conclude
+        verify (fname == "is_upper") then is_bool_fn = true; conclude
+        verify (fname == "is_lower") then is_bool_fn = true; conclude
+
+        datum s_idx : whole = get_struct_idx(fname);
+
+        datum is_builtin : state = false;
+        verify (is_str_fn) then is_builtin = true; res_type = "ptr"; conclude
+        verify (is_int_fn) then is_builtin = true; res_type = "i64"; conclude
+        verify (is_dbl_fn) then is_builtin = true; res_type = "double"; conclude
+        verify (is_bool_fn) then is_builtin = true; res_type = "i1"; conclude
+
+        verify (not is_builtin) then
+            verify (s_idx != -1) then
+                 res_type = "%struct." + fname;
+            otherwise
+                 res_type = get_func_ret_type(fname);
+                 verify (res_type == "unknown") then
+                      type_error("Undeclared function: " + fname);
+                 conclude
+            conclude
+        conclude
+    conclude
+
+    verify (k == NODE_ARRAY_LITERAL) then
+        datum len : whole = length(node.children);
+        verify (len > 0) then
+             datum i : whole = 0;
+             cycle (i < len) do
+                 propagate_type(node.children[i]);
+                 i = i + 1;
+             conclude
+        conclude
+        res_type = "ptr"; // Opaque pointer
+    conclude
+
+    verify (k == NODE_ARRAY_ACCESS) then
+        datum base_t : series = propagate_type(node.left);
+        propagate_type(node.condition); // Evaluate index
+
+        verify (substring(base_t, length(base_t) - 1, 1) == "*") then
+            res_type = substring(base_t, 0, length(base_t) - 1);
+        otherwise
+            type_error("Cannot index into non-array type: " + base_t);
+        conclude
+    conclude
+
+    verify (k == NODE_MEMBER_ACCESS) then
+        datum base_t : series = propagate_type(node.left);
+
+        verify (substring(base_t, length(base_t) - 1, 1) == "*") then
+            base_t = substring(base_t, 0, length(base_t) - 1);
+        conclude
+
+        verify (substring(base_t, 0, 8) == "%struct.") then
+            datum s_name : series = substring(base_t, 8, length(base_t) - 8);
+            res_type = get_struct_field_type(s_name, node.text_val);
+            verify (res_type == "unknown") then
+                type_error("Struct " + s_name + " has no field '" + node.text_val + "'");
+            conclude
+        otherwise
+            type_error("Cannot access member of non-struct type: " + base_t);
+        conclude
+    conclude
+
+    node_heap[node_idx].resolved_type = res_type;
+    result res_type;
+end
+
+algorithm propagate_stmt(node_idx : whole) -> void
+begin
+    verify (node_idx == -1) then result; conclude
+    datum node : ASTNode = node_heap[node_idx];
+    datum k : whole = node.kind;
+
+    verify (k == NODE_VAR_DECL) then
+        datum t : series = map_type_node(node.type_node);
+        add_symbol(node.text_val, t);
+        verify (node.initializer != -1) then
+            propagate_type(node.initializer);
+        conclude
+    conclude
+
+    verify (k == NODE_ASSIGN) then
+        propagate_type(node.initializer);
+        // We could verify assignment type compatibility here
+    conclude
+
+    verify (k == NODE_ARRAY_ASSIGN) then
+        propagate_type(node.left); // Propagate the base pointer
+        propagate_type(node.initializer);
+        propagate_type(node.condition); // The index
+    conclude
+
+    verify (k == NODE_MEMBER_ASSIGN) then
+        propagate_type(node.left); // Propagate the base pointer
+        propagate_type(node.initializer);
+    conclude
+
+    verify (k == NODE_EXPR_STMT) then
+        verify (node.initializer != -1) then
+            propagate_type(node.initializer);
+        conclude
+    conclude
+
+    verify (k == NODE_RETURN) then
+        verify (node.initializer != -1) then
+            propagate_type(node.initializer);
+        conclude
+    conclude
+
+    verify (k == NODE_IF) then
+        propagate_type(node.condition);
+        propagate_block(node.then_branch);
+        verify (node.else_branch != -1) then
+            propagate_block(node.else_branch);
+        conclude
+    conclude
+
+    verify (k == NODE_WHILE) then
+        propagate_type(node.condition);
+        propagate_block(node.then_branch);
+    conclude
+
+    verify (k == NODE_BLOCK) then
+        propagate_block(node_idx);
+    conclude
+end
+
+algorithm propagate_block(node_idx : whole) -> void
+begin
+    push_scope();
+    datum blk : ASTNode = node_heap[node_idx];
+    datum i : whole = 0;
+    datum len : whole = length(blk.children);
+    cycle (i < len) do
+        propagate_stmt(blk.children[i]);
+        i = i + 1;
+    conclude
+    pop_scope();
+end
+
+// Main Entry Point for Type Propagation
+algorithm run_type_propagation(prog_idx : whole) -> void
+begin
+    datum i : whole = 0;
+    datum children : sequence<whole> = node_heap[prog_idx].children;
+    datum len : whole = length(children);
+
+    // First Pass: Collect all global functions and structs to allow forward references
+    cycle (i < len) do
+        datum decl_idx : whole = children[i];
+        datum k : whole = node_heap[decl_idx].kind;
+
+        verify (k == NODE_STRUCT_DECL) then
+            datum sname : series = node_heap[decl_idx].text_val;
+            datum s_idx : whole = add_struct(sname);
+
+            datum j : whole = 0;
+            datum schildren : sequence<whole> = node_heap[decl_idx].children;
+            datum flen : whole = length(schildren);
+            cycle (j < flen) do
+                datum fidx : whole = schildren[j];
+                datum fname : series = node_heap[fidx].text_val;
+                datum ftype : series = map_type_node(node_heap[fidx].type_node);
+                add_struct_field(s_idx, fname, ftype);
+                j = j + 1;
+            conclude
+        conclude
+
+        verify (k == NODE_FUNC_DECL) then
+            datum fname : series = node_heap[decl_idx].text_val;
+            datum rtype : series = map_type_node(node_heap[decl_idx].type_node);
+            verify (fname == "genesis") then rtype = "i32"; conclude
+            add_func(fname, rtype);
+        conclude
+
+        i = i + 1;
+    conclude
+
+    // Second Pass: Propagate types in all bodies
+    i = 0;
+    cycle (i < len) do
+        datum decl_idx : whole = children[i];
+        datum k : whole = node_heap[decl_idx].kind;
+
+        verify (k == NODE_VAR_DECL) then
+            datum t : series = map_type_node(node_heap[decl_idx].type_node);
+            add_symbol(node_heap[decl_idx].text_val, t);
+            verify (node_heap[decl_idx].initializer != -1) then
+                propagate_type(node_heap[decl_idx].initializer);
+            conclude
+        conclude
+
+        datum is_func_decl_with_body : state = false;
+        verify (k == NODE_FUNC_DECL) then
+            verify (node_heap[decl_idx].then_branch != -1) then
+                is_func_decl_with_body = true;
+            conclude
+        conclude
+
+        verify (is_func_decl_with_body) then
+            push_scope();
+            // Add params to scope
+            datum j : whole = 0;
+            datum fchildren : sequence<whole> = node_heap[decl_idx].children;
+            datum plen : whole = length(fchildren);
+            cycle (j < plen) do
+                datum pidx : whole = fchildren[j];
+                datum pname : series = node_heap[pidx].text_val;
+                datum ptype : series = map_type_node(node_heap[pidx].type_node);
+                add_symbol(pname, ptype);
+                j = j + 1;
+            conclude
+
+            // Propagate block directly to avoid duplicate scope pushing
+            datum blk : ASTNode = node_heap[node_heap[decl_idx].then_branch];
+            datum bi : whole = 0;
+            datum blen : whole = length(blk.children);
+            cycle (bi < blen) do
+                propagate_stmt(blk.children[bi]);
+                bi = bi + 1;
+            conclude
+
+            pop_scope();
+        conclude
+
+        i = i + 1;
+    conclude
+end
+// String Utilities
+
+algorithm is_space(c : whole) -> state
+begin
+    // Space, Tab, Newline, CR
+    verify (c == 32 or c == 9 or c == 10 or c == 13) then
+        result true;
+    otherwise
+        result false;
+    conclude
+end
+
+algorithm is_digit(c : whole) -> state
+begin
+    verify (c >= 48 and c <= 57) then
+        result true;
+    otherwise
+        result false;
+    conclude
+end
+
+algorithm is_alpha(c : whole) -> state
+begin
+    // Check ranges explicitamente para evitar ambiguedades de precedencia
+    // A-Z (65-90)
+    verify (c >= 65 and c <= 90) then result true; conclude
+    // a-z (97-122)
+    verify (c >= 97 and c <= 122) then result true; conclude
+    // _ (95)
+    verify (c == 95) then result true; conclude
+
+    result false;
+end
+
+algorithm is_alnum(c : whole) -> state
+begin
+    // Combinar is_alpha y is_digit directamente
+    verify (is_alpha(c)) then result true; conclude
+    verify (is_digit(c)) then result true; conclude
+    result false;
+end
+
+// Check if string starts with prefix
+algorithm starts_with(s : series, prefix : series) -> state
+begin
+    datum s_len : whole = length(s);
+    datum p_len : whole = length(prefix);
+    verify (s_len < p_len) then
+        result false;
+    conclude
+
+    datum sub : series = substring(s, 0, p_len);
+    verify (sub == prefix) then
+        result true;
+    otherwise
+        result false;
+    conclude
+end
+
+// Helper to get directory name
+algorithm get_dirname(path : series) -> series
+begin
+    datum len : whole = length(path);
+    datum i : whole = len - 1;
+    cycle (i >= 0) do
+        datum c : whole = char_at(path, i);
+        verify (c == 47) then // '/'
+            result substring(path, 0, i);
+        conclude
+        i = i - 1;
+    conclude
+    result ".";
+end
+
+// Join paths
+algorithm path_join(dir : series, file : series) -> series
+begin
+    verify (dir == ".") then
+        result file;
+    conclude
+    // Check if dir ends with /
+    datum dir_len : whole = length(dir);
+    verify (dir_len > 0) then
+        datum last : whole = char_at(dir, dir_len - 1);
+        verify (last == 47) then
+            result dir + file;
+        otherwise
+            result dir + "/" + file;
+        conclude
+    conclude
+    result file;
+end
+
+// SECURITY MEASURE: Check for safe filename
+algorithm is_safe_path(path : series) -> state
+begin
+    datum len : whole = length(path);
+    datum i : whole = 0;
+    cycle (i < len) do
+        datum c : whole = char_at(path, i);
+        // Block: ; & | $ ` ( ) < >
+        verify (c == 59 or c == 38 or c == 124 or c == 36 or c == 96 or c == 40 or c == 41 or c == 60 or c == 62) then
+            result false;
+        conclude
+        i = i + 1;
+    conclude
+    result true;
+end
+
+// Split string by lines
+algorithm split_lines(content : series) -> sequence<series>
+begin
+    datum result_seq : sequence<series>;
+    datum len : whole = length(content);
+    datum i : whole = 0;
+    datum start : whole = 0;
+
+    cycle (i < len) do
+        datum c : whole = char_at(content, i);
+        verify (c == 10) then // Newline
+            datum line : series = substring(content, start, i - start);
+            verify (length(line) > 0) then
+                append(result_seq, line);
+            conclude
+            start = i + 1;
+        conclude
+        i = i + 1;
+    conclude
+
+    // Add last line if any
+    verify (start < len) then
+        datum line : series = substring(content, start, len - start);
+        verify (length(line) > 0) then
+            append(result_seq, line);
+        conclude
+    conclude
+
+    result result_seq;
+end
+// Lexer State
+datum lexer_source : series = "";
+datum lexer_len : whole = 0;
+datum lexer_pos : whole = 0;
+datum lexer_line : whole = 1;
+datum lexer_col : whole = 1;
+
+datum token_stream : sequence<Token>;
+
+algorithm lexer_init(source : series) -> void
+begin
+    lexer_source = source;
+    lexer_len = length(source);
+    lexer_pos = 0;
+    lexer_line = 1;
+    lexer_col = 1;
+end
+
+algorithm peek_char(offset : whole) -> whole
+begin
+    verify (lexer_pos + offset < lexer_len) then
+        result char_at(lexer_source, lexer_pos + offset);
+    otherwise
+        result 0; // EOF
+    conclude
+end
+
+algorithm advance_char() -> whole
+begin
+    datum c : whole = peek_char(0);
+    lexer_pos = lexer_pos + 1;
+    verify (c == 10) then // Newline
+        lexer_line = lexer_line + 1;
+        lexer_col = 1;
+    otherwise
+        lexer_col = lexer_col + 1;
+    conclude
+    result c;
+end
+
+algorithm add_token(type : whole, val : series) -> void
+begin
+    datum t : Token;
+    t.type = type;
+    t.value = val;
+    t.line = lexer_line;
+    t.column = lexer_col; // Approximation
+    append(token_stream, t);
+end
+
+algorithm read_while_digit() -> series
+begin
+    datum start : whole = lexer_pos;
+    cycle (is_digit(peek_char(0))) do
+        advance_char();
+    conclude
+    result substring(lexer_source, start, lexer_pos - start);
+end
+
+algorithm lex_number() -> void
+begin
+    datum start_col : whole = lexer_col;
+    datum val : series = read_while_digit();
+    datum type : whole = TOKEN_INTEGER_LITERAL;
+
+    verify (peek_char(0) == 46) then // '.'
+        advance_char(); // skip dot
+        val = val + "." + read_while_digit();
+        type = TOKEN_FLOAT_LITERAL;
+    conclude
+
+    add_token(type, val);
+end
+
+algorithm lex_identifier_or_keyword() -> void
+begin
+    datum start : whole = lexer_pos;
+    // FIX: Allow _ (95) in identifier body
+    cycle (is_alnum(peek_char(0)) or peek_char(0) == 95) do
+        advance_char();
+    conclude
+    datum text : series = substring(lexer_source, start, lexer_pos - start);
+
+    datum type : whole = TOKEN_IDENTIFIER;
+
+    // Keyword Check
+    verify (text == "datum") then type = TOKEN_DATUM; conclude
+    verify (text == "verify") then type = TOKEN_VERIFY; conclude
+    verify (text == "then") then type = TOKEN_THEN; conclude
+    verify (text == "otherwise") then type = TOKEN_OTHERWISE; conclude
+    verify (text == "conclude") then type = TOKEN_CONCLUDE; conclude
+    verify (text == "cycle") then type = TOKEN_CYCLE; conclude
+    verify (text == "do") then type = TOKEN_DO; conclude
+    verify (text == "algorithm") then type = TOKEN_ALGORITHM; conclude
+    verify (text == "begin") then type = TOKEN_BEGIN; conclude
+    verify (text == "end") then type = TOKEN_END; conclude
+    verify (text == "result") then type = TOKEN_RESULT; conclude
+    verify (text == "reveal") then type = TOKEN_REVEAL; conclude
+    verify (text == "inquire") then type = TOKEN_INQUIRE; conclude
+    verify (text == "incorporate") then type = TOKEN_INCORPORATE; conclude
+    verify (text == "structure") then type = TOKEN_STRUCTURE; conclude
+    verify (text == "and") then type = TOKEN_AND; conclude
+    verify (text == "or") then type = TOKEN_OR; conclude
+    verify (text == "not") then type = TOKEN_NOT; conclude
+
+    verify (text == "whole") then type = TOKEN_TYPE_WHOLE; conclude
+    verify (text == "precise") then type = TOKEN_TYPE_PRECISE; conclude
+    verify (text == "series") then type = TOKEN_TYPE_SERIES; conclude
+    verify (text == "state") then type = TOKEN_TYPE_STATE; conclude
+    verify (text == "sequence") then type = TOKEN_TYPE_SEQUENCE; conclude
+
+    verify (text == "true") then type = TOKEN_BOOLEAN_LITERAL; conclude
+    verify (text == "false") then type = TOKEN_BOOLEAN_LITERAL; conclude
+
+    add_token(type, text);
+end
+
+algorithm lex_string() -> void
+begin
+    advance_char(); // Skip opening quote
+    datum start : whole = lexer_pos;
+    datum running : state = true;
+
+    cycle (running) do
+        datum c : whole = peek_char(0);
+
+        verify (c == 0) then
+            reveal("Error: Unterminated string literal");
+            exit_program(1);
+        conclude
+
+        verify (c == 34) then // '"'
+            running = false;
+        otherwise
+            verify (c == 92) then // '\'
+                advance_char(); // Skip backslash
+                advance_char(); // Skip escaped char
+            otherwise
+                advance_char();
+            conclude
+        conclude
+    conclude
+
+    datum text : series = substring(lexer_source, start, lexer_pos - start);
+    advance_char(); // Skip closing quote
+    add_token(TOKEN_STRING_LITERAL, text);
+end
+
+algorithm tokenize() -> void
+begin
+    cycle (lexer_pos < lexer_len) do
+        datum c : whole = peek_char(0);
+
+        // Whitespace
+        verify (is_space(c)) then
+            advance_char();
+        // Comment //
+        otherwise verify (c == 47 and peek_char(1) == 47) then
+            cycle (not (peek_char(0) == 10) and not (peek_char(0) == 0)) do
+                advance_char();
+            conclude
+        // Numbers
+        otherwise verify (is_digit(c)) then
+            lex_number();
+        // Identifiers
+        // FIX: Allow _ (95) as start char
+        otherwise verify (is_alpha(c) or c == 95) then
+            lex_identifier_or_keyword();
+        // String
+        otherwise verify (c == 34) then // '"'
+            lex_string();
+        // Operators
+        otherwise
+            datum handled : state = false;
+            datum next : whole = peek_char(1);
+
+            // 2-char operators
+            verify (not handled and c == 45 and next == 62) then // ->
+                add_token(TOKEN_ARROW, "->"); advance_char(); advance_char(); handled = true;
+            conclude
+            verify (not handled and c == 61 and next == 61) then // ==
+                add_token(TOKEN_EQ, "=="); advance_char(); advance_char(); handled = true;
+            conclude
+            verify (not handled and c == 33 and next == 61) then // !=
+                add_token(TOKEN_NEQ, "!="); advance_char(); advance_char(); handled = true;
+            conclude
+            verify (not handled and c == 62 and next == 61) then // >=
+                add_token(TOKEN_GE, ">="); advance_char(); advance_char(); handled = true;
+            conclude
+            verify (not handled and c == 60 and next == 61) then // <=
+                add_token(TOKEN_LE, "<="); advance_char(); advance_char(); handled = true;
+            conclude
+
+            // Single char
+            verify (not handled and c == 43) then add_token(TOKEN_PLUS, "+"); advance_char(); handled = true; conclude
+            verify (not handled and c == 45) then add_token(TOKEN_MINUS, "-"); advance_char(); handled = true; conclude
+            verify (not handled and c == 42) then add_token(TOKEN_STAR, "*"); advance_char(); handled = true; conclude
+            verify (not handled and c == 47) then add_token(TOKEN_SLASH, "/"); advance_char(); handled = true; conclude
+            verify (not handled and c == 37) then add_token(TOKEN_MODULO, "%"); advance_char(); handled = true; conclude
+            verify (not handled and c == 61) then add_token(TOKEN_ASSIGN, "="); advance_char(); handled = true; conclude
+            verify (not handled and c == 46) then add_token(TOKEN_DOT, "."); advance_char(); handled = true; conclude
+            verify (not handled and c == 58) then add_token(TOKEN_COLON, ":"); advance_char(); handled = true; conclude
+            verify (not handled and c == 59) then add_token(TOKEN_SEMICOLON, ";"); advance_char(); handled = true; conclude
+            verify (not handled and c == 44) then add_token(TOKEN_COMMA, ","); advance_char(); handled = true; conclude
+            verify (not handled and c == 40) then add_token(TOKEN_LPAREN, "("); advance_char(); handled = true; conclude
+            verify (not handled and c == 41) then add_token(TOKEN_RPAREN, ")"); advance_char(); handled = true; conclude
+            verify (not handled and c == 91) then add_token(TOKEN_LBRACKET, "["); advance_char(); handled = true; conclude
+            verify (not handled and c == 93) then add_token(TOKEN_RBRACKET, "]"); advance_char(); handled = true; conclude
+            verify (not handled and c == 62) then add_token(TOKEN_GT, ">"); advance_char(); handled = true; conclude
+            verify (not handled and c == 60) then add_token(TOKEN_LT, "<"); advance_char(); handled = true; conclude
+
+            verify (handled == false) then
+                reveal("Error: Unexpected character: " + character(c) + " (" + to_string(c) + ") at line " + to_string(lexer_line));
+                exit_program(1);
+            conclude
+        conclude // End of verify(string)
+        conclude // End of verify(alpha)
+        conclude // End of verify(digit)
+        conclude // End of verify(comment)
+        conclude // End of verify(space)
+    conclude // End of cycle
+    add_token(TOKEN_EOF, "");
+end
+
+algorithm preprocess_includes(code : series, base_dir : series) -> series
+begin
+    datum result_code : series = "";
+    datum len : whole = length(code);
+    datum i : whole = 0;
+
+    cycle (i < len) do
+        datum line_start : whole = i;
+        datum line_end : whole = i;
+        cycle (line_end < len and not (char_at(code, line_end) == 10)) do
+            line_end = line_end + 1;
+        conclude
+
+        datum line_str : series = substring(code, line_start, line_end - line_start);
+
+        verify (starts_with(line_str, "incorporate")) then
+            // Extract filename. Format: incorporate "file.inc"
+            // Find first quote
+            datum q1 : whole = -1;
+            datum q2 : whole = -1;
+            datum k : whole = 0;
+            cycle (k < length(line_str)) do
+                verify (char_at(line_str, k) == 34) then
+                    verify (q1 == -1) then q1 = k;
+                    otherwise verify (q2 == -1) then q2 = k; conclude
+                    conclude
+                conclude
+                k = k + 1;
+            conclude
+
+            verify (not (q1 == -1) and not (q2 == -1)) then
+                datum inc_path : series = substring(line_str, q1 + 1, q2 - q1 - 1);
+                datum full_path : series = path_join(base_dir, inc_path);
+
+                // Read included file
+                verify (file_exists(full_path)) then
+                    datum inc_content : series = file_read(full_path);
+                    datum inc_dir : series = get_dirname(full_path);
+                    // Recursively process
+                    result_code = result_code + preprocess_includes(inc_content, inc_dir) + character(10);
+                otherwise
+                    reveal("Error: Include file not found: " + inc_path);
+                    exit_program(1);
+                conclude
+            otherwise
+                result_code = result_code + line_str + character(10);
+            conclude
+        otherwise
+            result_code = result_code + line_str + character(10);
+        conclude
+
+        i = line_end + 1;
+    conclude
+
+    result result_code;
+end
+// Parser State
+datum parser_pos : whole = 0;
+datum parser_len : whole = 0;
+
+algorithm parser_init() -> void
+begin
+    parser_pos = 0;
+    parser_len = length(token_stream);
+end
+
+algorithm peek_token() -> Token
+begin
+    verify (parser_pos < parser_len) then
+        result token_stream[parser_pos];
+    otherwise
+        // Return EOF token safely
+        datum t : Token; t.type = TOKEN_EOF; result t;
+    conclude
+end
+
+algorithm advance_token() -> Token
+begin
+    verify (parser_pos < parser_len) then
+        datum t : Token = token_stream[parser_pos];
+        parser_pos = parser_pos + 1;
+        result t;
+    otherwise
+        datum t : Token; t.type = TOKEN_EOF; result t;
+    conclude
+end
+
+algorithm match_token(type : whole) -> state
+begin
+    datum t : Token = peek_token();
+    verify (t.type == type) then
+        advance_token();
+        result true;
+    otherwise
+        result false;
+    conclude
+end
+
+algorithm check_token(type : whole) -> state
+begin
+    datum t : Token = peek_token();
+    result t.type == type;
+end
+
+algorithm consume_token(type : whole, err_msg : series) -> Token
+begin
+    verify (check_token(type)) then
+        result advance_token();
+    otherwise
+        reveal("Syntax Error: " + err_msg);
+        datum t : Token = peek_token();
+        reveal("Got token type: " + to_string(t.type) + " at line " + to_string(t.line));
+        exit_program(1);
+        // Return dummy to satisfy return type
+        datum dummy : Token; result dummy;
+    conclude
+end
+
+// Forward declarations
+algorithm parse_program() -> whole;
+algorithm parse_declaration() -> whole;
+algorithm parse_var_decl() -> whole;
+algorithm parse_func_decl() -> whole;
+algorithm parse_struct_decl() -> whole;
+algorithm parse_block() -> whole;
+algorithm parse_statement() -> whole;
+algorithm parse_expression() -> whole;
+algorithm parse_logic_or() -> whole;
+algorithm parse_logic_and() -> whole;
+algorithm parse_comparison() -> whole;
+algorithm parse_term() -> whole;
+algorithm parse_factor() -> whole;
+algorithm parse_unary() -> whole;
+algorithm parse_primary() -> whole;
+algorithm parse_type() -> whole;
+
+algorithm parse_program() -> whole
+begin
+    datum prog : whole = create_node(NODE_PROGRAM);
+
+    cycle (check_token(TOKEN_EOF) == false) do
+        // FIX: Vector invalidation
+        datum decl : whole = parse_declaration();
+        append(node_heap[prog].children, decl);
+    conclude
+
+    result prog;
+end
+
+algorithm parse_declaration() -> whole
+begin
+    verify (match_token(TOKEN_DATUM)) then
+        result parse_var_decl();
+    otherwise verify (match_token(TOKEN_ALGORITHM)) then
+        result parse_func_decl();
+    otherwise verify (match_token(TOKEN_STRUCTURE)) then
+        result parse_struct_decl();
+    otherwise
+        reveal("Error: Expected declaration at line " + to_string(peek_token().line));
+        exit_program(1);
+        result -1;
+    conclude // structure
+    conclude // algorithm
+    conclude // datum
+end
+
+algorithm parse_var_decl() -> whole
+begin
+    // datum name : type = value ;
+    datum name_tok : Token = consume_token(TOKEN_IDENTIFIER, "Expected variable name");
+    consume_token(TOKEN_COLON, "Expected ':'");
+
+    datum type_node : whole = parse_type();
+    datum init_expr : whole = -1;
+
+    verify (match_token(TOKEN_ASSIGN)) then
+        init_expr = parse_expression();
+    conclude
+
+    consume_token(TOKEN_SEMICOLON, "Expected ';'");
+
+    datum node_idx : whole = create_node(NODE_VAR_DECL);
+    node_heap[node_idx].text_val = name_tok.value;
+    node_heap[node_idx].type_node = type_node;
+    node_heap[node_idx].initializer = init_expr;
+
+    result node_idx;
+end
+
+algorithm parse_func_decl() -> whole
+begin
+    // algorithm name ( params ) -> type begin ... end
+    datum name_tok : Token = consume_token(TOKEN_IDENTIFIER, "Expected function name");
+    consume_token(TOKEN_LPAREN, "Expected '('");
+
+    datum node_idx : whole = create_node(NODE_FUNC_DECL);
+    node_heap[node_idx].text_val = name_tok.value;
+
+    // Params
+    verify (check_token(TOKEN_RPAREN) == false) then
+        // First param
+        datum pname : Token = consume_token(TOKEN_IDENTIFIER, "Expected param name");
+        consume_token(TOKEN_COLON, "Expected ':'");
+        datum ptype : whole = parse_type();
+        datum param_node : whole = create_node(NODE_PARAM);
+        node_heap[param_node].text_val = pname.value;
+        node_heap[param_node].type_node = ptype;
+        append(node_heap[node_idx].children, param_node);
+
+        cycle (match_token(TOKEN_COMMA)) do
+            datum pname2 : Token = consume_token(TOKEN_IDENTIFIER, "Expected param name");
+            consume_token(TOKEN_COLON, "Expected ':'");
+            datum ptype2 : whole = parse_type();
+            datum param_node2 : whole = create_node(NODE_PARAM);
+            node_heap[param_node2].text_val = pname2.value;
+            node_heap[param_node2].type_node = ptype2;
+            append(node_heap[node_idx].children, param_node2);
+        conclude
+    conclude
+
+    consume_token(TOKEN_RPAREN, "Expected ')'");
+
+    // Return Type
+    datum ret_type : whole = create_node(NODE_TYPE);
+    node_heap[ret_type].text_val = "void"; // Default
+
+    verify (match_token(TOKEN_ARROW)) then
+        ret_type = parse_type();
+    conclude
+    node_heap[node_idx].type_node = ret_type;
+
+    // FIX: Handle forward declaration (semicolon instead of body)
+    verify (match_token(TOKEN_SEMICOLON)) then
+        node_heap[node_idx].then_branch = -1;
+    otherwise
+        consume_token(TOKEN_BEGIN, "Expected 'begin' or ';'");
+        node_heap[node_idx].then_branch = parse_block(); // reusing then_branch for body
+        consume_token(TOKEN_END, "Expected 'end' after function body");
+    conclude
+
+    result node_idx;
+end
+
+algorithm parse_struct_decl() -> whole
+begin
+    datum name : Token = consume_token(TOKEN_IDENTIFIER, "Structure name");
+    consume_token(TOKEN_BEGIN, "begin");
+
+    datum node_idx : whole = create_node(NODE_STRUCT_DECL);
+    node_heap[node_idx].text_val = name.value;
+
+    cycle (check_token(TOKEN_END) == false and check_token(TOKEN_EOF) == false) do
+        verify (match_token(TOKEN_DATUM)) then
+            // FIX: Vector invalidation
+            datum decl : whole = parse_var_decl();
+            append(node_heap[node_idx].children, decl);
+        otherwise
+            reveal("Expected datum in struct");
+            exit_program(1);
+        conclude
+    conclude
+
+    consume_token(TOKEN_END, "end");
+    result node_idx;
+end
+
+algorithm parse_block() -> whole
+begin
+    datum blk : whole = create_node(NODE_BLOCK);
+    cycle (check_token(TOKEN_END) == false and
+           check_token(TOKEN_OTHERWISE) == false and
+           check_token(TOKEN_CONCLUDE) == false and
+           check_token(TOKEN_EOF) == false) do
+        // FIX: Vector invalidation
+        datum stmt : whole = parse_statement();
+        append(node_heap[blk].children, stmt);
+    conclude
+    result blk;
+end
+
+algorithm parse_statement() -> whole
+begin
+    verify (match_token(TOKEN_VERIFY)) then
+        // Verify
+        consume_token(TOKEN_LPAREN, "(");
+        datum cond : whole = parse_expression();
+        consume_token(TOKEN_RPAREN, ")");
+        consume_token(TOKEN_THEN, "then");
+
+        datum if_node : whole = create_node(NODE_IF);
+        node_heap[if_node].condition = cond;
+        node_heap[if_node].then_branch = parse_block();
+
+        verify (match_token(TOKEN_OTHERWISE)) then
+            node_heap[if_node].else_branch = parse_block();
+        conclude
+
+        consume_token(TOKEN_CONCLUDE, "conclude");
+        result if_node;
+
+    otherwise verify (match_token(TOKEN_CYCLE)) then
+        // Cycle
+        consume_token(TOKEN_LPAREN, "(");
+        datum cond : whole = parse_expression();
+        consume_token(TOKEN_RPAREN, ")");
+        consume_token(TOKEN_DO, "do");
+
+        datum cycle_node : whole = create_node(NODE_WHILE);
+        node_heap[cycle_node].condition = cond;
+        node_heap[cycle_node].then_branch = parse_block(); // reusing then_branch for body
+        consume_token(TOKEN_CONCLUDE, "conclude");
+        result cycle_node;
+
+    otherwise verify (match_token(TOKEN_RESULT)) then
+        // Result
+        datum ret_node : whole = create_node(NODE_RETURN);
+        verify (check_token(TOKEN_SEMICOLON) == false) then
+            node_heap[ret_node].initializer = parse_expression(); // reusing initializer for value
+        conclude
+        consume_token(TOKEN_SEMICOLON, ";");
+        result ret_node;
+
+    otherwise verify (match_token(TOKEN_DATUM)) then
+        result parse_var_decl();
+
+    otherwise verify (match_token(TOKEN_REVEAL)) then
+        // Reveal (syntactic sugar for function call statement)
+        consume_token(TOKEN_LPAREN, "(");
+        datum call_node : whole = create_node(NODE_FUNC_CALL);
+        node_heap[call_node].text_val = "reveal";
+
+        verify (check_token(TOKEN_RPAREN) == false) then
+            // FIX: Vector invalidation
+            datum arg : whole = parse_expression();
+            append(node_heap[call_node].children, arg);
+            cycle (match_token(TOKEN_COMMA)) do
+                // FIX: Vector invalidation
+                datum arg2 : whole = parse_expression();
+                append(node_heap[call_node].children, arg2);
+            conclude
+        conclude
+        consume_token(TOKEN_RPAREN, ")");
+        consume_token(TOKEN_SEMICOLON, ";");
+
+        datum stmt : whole = create_node(NODE_EXPR_STMT);
+        node_heap[stmt].initializer = call_node;
+        result stmt;
+
+    otherwise
+        // Expr Stmt or Assignment
+        datum expr : whole = parse_expression();
+
+        verify (match_token(TOKEN_ASSIGN)) then
+            datum val : whole = parse_expression();
+            consume_token(TOKEN_SEMICOLON, ";");
+
+            // Check expr type for Assignment target
+            datum kind : whole = node_heap[expr].kind;
+
+            verify (kind == NODE_IDENTIFIER) then
+                datum assign : whole = create_node(NODE_ASSIGN);
+                node_heap[assign].text_val = node_heap[expr].text_val;
+                node_heap[assign].initializer = val; // value
+                result assign;
+            otherwise verify (kind == NODE_ARRAY_ACCESS) then
+                datum arr_assign : whole = create_node(NODE_ARRAY_ASSIGN);
+                node_heap[arr_assign].text_val = node_heap[expr].text_val; // array name
+                node_heap[arr_assign].condition = node_heap[expr].condition; // index
+                node_heap[arr_assign].initializer = val;
+                result arr_assign;
+            otherwise verify (kind == NODE_MEMBER_ACCESS) then
+                datum mem_assign : whole = create_node(NODE_MEMBER_ASSIGN);
+                node_heap[mem_assign].left = node_heap[expr].left; // object
+                node_heap[mem_assign].text_val = node_heap[expr].text_val; // member
+                node_heap[mem_assign].initializer = val;
+                result mem_assign;
+            otherwise
+                reveal("Invalid assignment target");
+                exit_program(1);
+            conclude // assignment target check
+            conclude // assignment target check (inner else if)
+            conclude // assignment target check (inner else if)
+        otherwise
+            consume_token(TOKEN_SEMICOLON, ";");
+            datum estmt : whole = create_node(NODE_EXPR_STMT);
+            node_heap[estmt].initializer = expr;
+            result estmt;
+        conclude // assign match
+    conclude // reveal
+    conclude // datum
+    conclude // result
+    conclude // cycle
+    conclude // verify
+    result -1; // Should not reach
+end
+
+algorithm parse_expression() -> whole
+begin
+    result parse_logic_or();
+end
+
+algorithm parse_logic_or() -> whole
+begin
+    datum expr : whole = parse_logic_and();
+    cycle (match_token(TOKEN_OR)) do
+        datum right : whole = parse_logic_and();
+        datum new_expr : whole = create_node(NODE_BINARY_OP);
+        node_heap[new_expr].left = expr;
+        node_heap[new_expr].right = right;
+        node_heap[new_expr].op = "or";
+        expr = new_expr;
+    conclude
+    result expr;
+end
+
+algorithm parse_logic_and() -> whole
+begin
+    datum expr : whole = parse_comparison();
+    cycle (match_token(TOKEN_AND)) do
+        datum right : whole = parse_comparison();
+        datum new_expr : whole = create_node(NODE_BINARY_OP);
+        node_heap[new_expr].left = expr;
+        node_heap[new_expr].right = right;
+        node_heap[new_expr].op = "and";
+        expr = new_expr;
+    conclude
+    result expr;
+end
+
+algorithm parse_comparison() -> whole
+begin
+    datum expr : whole = parse_term();
+    // FIX: Added TOKEN_GE (47), TOKEN_LE (48), TOKEN_NEQ (49)
+    cycle (check_token(TOKEN_GT) or check_token(TOKEN_LT) or check_token(TOKEN_EQ) or check_token(TOKEN_GE) or check_token(TOKEN_LE) or check_token(TOKEN_NEQ)) do
+        datum op_tok : Token = advance_token();
+        datum right : whole = parse_term();
+        datum new_expr : whole = create_node(NODE_BINARY_OP);
+        node_heap[new_expr].left = expr;
+        node_heap[new_expr].right = right;
+        node_heap[new_expr].op = op_tok.value;
+        expr = new_expr;
+    conclude
+    result expr;
+end
+
+algorithm parse_term() -> whole
+begin
+    datum expr : whole = parse_factor();
+    cycle (check_token(TOKEN_PLUS) or check_token(TOKEN_MINUS)) do
+        datum op_tok : Token = advance_token();
+        datum right : whole = parse_factor();
+        datum new_expr : whole = create_node(NODE_BINARY_OP);
+        node_heap[new_expr].left = expr;
+        node_heap[new_expr].right = right;
+        node_heap[new_expr].op = op_tok.value;
+        expr = new_expr;
+    conclude
+    result expr;
+end
+
+algorithm parse_factor() -> whole
+begin
+    datum expr : whole = parse_unary();
+    cycle (check_token(TOKEN_STAR) or check_token(TOKEN_SLASH) or check_token(TOKEN_MODULO)) do
+        datum op_tok : Token = advance_token();
+        datum right : whole = parse_unary();
+        datum new_expr : whole = create_node(NODE_BINARY_OP);
+        node_heap[new_expr].left = expr;
+        node_heap[new_expr].right = right;
+        node_heap[new_expr].op = op_tok.value;
+        expr = new_expr;
+    conclude
+    result expr;
+end
+
+algorithm parse_unary() -> whole
+begin
+    verify (match_token(TOKEN_NOT)) then
+        datum right : whole = parse_unary();
+        datum node : whole = create_node(NODE_BINARY_OP);
+        node_heap[node].op = "not";
+        node_heap[node].right = right;
+        result node;
+    otherwise verify (match_token(TOKEN_MINUS)) then
+        datum right : whole = parse_unary();
+        datum node : whole = create_node(NODE_BINARY_OP);
+        node_heap[node].op = "-";
+        node_heap[node].right = right; // Unary minus only has right in current struct logic or left=null
+        result node;
+    conclude
+    conclude // not
+    result parse_primary();
+end
+
+algorithm parse_primary() -> whole
+begin
+    datum expr : whole = -1;
+
+    verify (match_token(TOKEN_INQUIRE)) then
+        consume_token(TOKEN_LPAREN, "(");
+        consume_token(TOKEN_RPAREN, ")");
+        expr = create_node(NODE_INQUIRE);
+    otherwise verify (match_token(TOKEN_LBRACKET)) then
+        // Array literal
+        expr = create_node(NODE_ARRAY_LITERAL);
+        verify (check_token(TOKEN_RBRACKET) == false) then
+            // Fix vector invalidation
+            datum el : whole = parse_expression();
+            append(node_heap[expr].children, el);
+            cycle (match_token(TOKEN_COMMA)) do
+                // Fix vector invalidation
+                datum el2 : whole = parse_expression();
+                append(node_heap[expr].children, el2);
+            conclude
+        conclude
+        consume_token(TOKEN_RBRACKET, "]");
+    otherwise verify (match_token(TOKEN_INTEGER_LITERAL)) then
+        datum t : Token = token_stream[parser_pos - 1];
+        expr = create_node(NODE_LITERAL);
+        node_heap[expr].value_type = "whole";
+        node_heap[expr].text_val = t.value;
+        node_heap[expr].int_val = to_integer(t.value);
+    otherwise verify (match_token(TOKEN_FLOAT_LITERAL)) then
+        datum t : Token = token_stream[parser_pos - 1];
+        expr = create_node(NODE_LITERAL);
+        node_heap[expr].value_type = "precise";
+        node_heap[expr].text_val = t.value;
+    otherwise verify (match_token(TOKEN_STRING_LITERAL)) then
+        datum t : Token = token_stream[parser_pos - 1];
+        expr = create_node(NODE_LITERAL);
+        node_heap[expr].value_type = "series";
+        node_heap[expr].text_val = t.value;
+    otherwise verify (match_token(TOKEN_BOOLEAN_LITERAL)) then
+        datum t : Token = token_stream[parser_pos - 1];
+        expr = create_node(NODE_LITERAL);
+        node_heap[expr].value_type = "state";
+        verify (t.value == "true") then node_heap[expr].bool_val = true; conclude
+    otherwise verify (match_token(TOKEN_IDENTIFIER)) then
+        datum name : series = token_stream[parser_pos - 1].value;
+
+        verify (match_token(TOKEN_LPAREN)) then
+            // Function Call
+            expr = create_node(NODE_FUNC_CALL);
+            node_heap[expr].text_val = name;
+            verify (check_token(TOKEN_RPAREN) == false) then
+                // Fix vector invalidation
+                datum arg : whole = parse_expression();
+                append(node_heap[expr].children, arg);
+                cycle (match_token(TOKEN_COMMA)) do
+                    // Fix vector invalidation
+                    datum arg2 : whole = parse_expression();
+                    append(node_heap[expr].children, arg2);
+                conclude
+            conclude
+            consume_token(TOKEN_RPAREN, ")");
+        otherwise verify (match_token(TOKEN_LBRACKET)) then
+            // Array Access
+            datum index : whole = parse_expression();
+            consume_token(TOKEN_RBRACKET, "]");
+            expr = create_node(NODE_ARRAY_ACCESS);
+            node_heap[expr].text_val = name;
+            node_heap[expr].condition = index;
+        otherwise
+            expr = create_node(NODE_IDENTIFIER);
+            node_heap[expr].text_val = name;
+        conclude // inner ID chain (LBRACKET)
+        conclude // inner ID chain (LPAREN)
+    otherwise verify (match_token(TOKEN_LPAREN)) then
+        expr = parse_expression();
+        consume_token(TOKEN_RPAREN, ")");
+    otherwise
+        reveal("Unexpected token in primary");
+        exit_program(1);
+    conclude // lparen
+    conclude // id
+    conclude // boolean
+    conclude // string
+    conclude // float
+    conclude // integer
+    conclude // lbracket
+    conclude // inquire
+
+    // Chaining
+    cycle (match_token(TOKEN_DOT)) do
+        datum mem : Token = consume_token(TOKEN_IDENTIFIER, "member");
+        datum parent : whole = expr;
+        expr = create_node(NODE_MEMBER_ACCESS);
+        node_heap[expr].left = parent;
+        node_heap[expr].text_val = mem.value;
+    conclude
+
+    result expr;
+end
+
+algorithm parse_type() -> whole
+begin
+    datum node : whole = create_node(NODE_TYPE);
+
+    verify (match_token(TOKEN_TYPE_WHOLE)) then node_heap[node].text_val = "whole";
+    otherwise verify (match_token(TOKEN_TYPE_PRECISE)) then node_heap[node].text_val = "precise";
+    otherwise verify (match_token(TOKEN_TYPE_SERIES)) then node_heap[node].text_val = "series";
+    otherwise verify (match_token(TOKEN_TYPE_STATE)) then node_heap[node].text_val = "state";
+    otherwise verify (match_token(TOKEN_TYPE_SEQUENCE)) then
+        node_heap[node].text_val = "sequence";
+        consume_token(TOKEN_LT, "<");
+        node_heap[node].subtype = parse_type();
+        consume_token(TOKEN_GT, ">");
+    otherwise verify (match_token(TOKEN_IDENTIFIER)) then
+        datum t : Token = token_stream[parser_pos - 1];
+        node_heap[node].text_val = t.value;
+    otherwise
+        reveal("Expected type");
+        exit_program(1);
+    conclude // id
+    conclude // sequence
+    conclude // state
+    conclude // series
+    conclude // precise
+    conclude // whole
+    result node;
+end
+// Code Generator State (LLVM IR)
+datum codegen_output : series = "";
+datum llvm_tmp_count : whole = 0;
+datum llvm_label_count : whole = 0;
+datum global_strings_output : series = "";
+datum string_count : whole = 0;
+datum current_func_name : series = "";
+
+// Forward declarations
+algorithm emit(line : series) -> void;
+algorithm emit_global(line : series) -> void;
+algorithm map_type_node(node_idx : whole) -> series;
+algorithm gen_expression(node_idx : whole) -> series;
+algorithm visit_stmt(node_idx : whole) -> void;
+algorithm visit_block(node_idx : whole) -> void;
+algorithm generate_code(prog_idx : whole) -> void;
+
+algorithm next_tmp() -> series
+begin
+    datum res : series = "%t" + to_string(llvm_tmp_count);
+    llvm_tmp_count = llvm_tmp_count + 1;
+    result res;
+end
+
+algorithm next_label() -> series
+begin
+    datum res : series = "L" + to_string(llvm_label_count);
+    llvm_label_count = llvm_label_count + 1;
+    result res;
+end
+
+algorithm emit(line : series) -> void
+begin
+    codegen_output = codegen_output + line + character(10);
+end
+
+algorithm emit_global(line : series) -> void
+begin
+    global_strings_output = global_strings_output + line + character(10);
+end
+
+algorithm map_type_node(node_idx : whole) -> series
+begin
+    datum name : series = node_heap[node_idx].text_val;
+    verify (name == "whole") then result "i64"; conclude
+    verify (name == "precise") then result "double"; conclude
+    verify (name == "series") then result "i8*"; conclude // Internal representation
+    verify (name == "state") then result "i1"; conclude
+    verify (name == "void") then result "void"; conclude
+    verify (name == "sequence") then
+        datum sub : series = map_type_node(node_heap[node_idx].subtype);
+        result sub + "*";
+    conclude
+    result "%struct." + name;
+end
+
+// Converts an internal strong type to an LLVM emissible type (replacing pointers with 'ptr')
+algorithm emit_type(t : series) -> series
+begin
+    verify (t == "void") then result "void"; conclude
+    verify (substring(t, length(t) - 1, 1) == "*") then
+        result "ptr";
+    conclude
+    result t;
+end
+
+// Generate an expression using type information
+algorithm gen_expression(node_idx : whole) -> series
+begin
+    verify (node_idx == -1) then result "0"; conclude
+
+    datum node : ASTNode = node_heap[node_idx];
+    datum k : whole = node.kind;
+
+    verify (k == NODE_LITERAL) then
+        verify (node.value_type == "series") then
+            datum str_len : whole = length(node.text_val);
+            datum str_name : series = "@.str." + to_string(string_count);
+            string_count = string_count + 1;
+            emit_global(str_name + " = private unnamed_addr constant [" + to_string(str_len + 1) + " x i8] c\"" + node.text_val + "\\00\", align 1");
+
+            datum tmp : series = next_tmp();
+            emit("    " + tmp + " = getelementptr inbounds [" + to_string(str_len + 1) + " x i8], [" + to_string(str_len + 1) + " x i8]* " + str_name + ", i64 0, i64 0");
+            result tmp;
+        conclude
+        verify (node.value_type == "state") then
+            verify (node.bool_val) then result "1"; otherwise result "0"; conclude
+        conclude
+        verify (node.value_type == "precise") then
+            // LLVM requires floating-point literals to have decimal point or scientific notation
+            // but `node.text_val` comes from `node_heap`, so we format it exactly.
+            datum v : series = node.text_val;
+            // Hacky check for missing decimal since parser might yield "1.0" as "1.0" or "1" depending on precision.
+            // Using character checking since index_of might not be defined in stable compiler
+            datum has_dot : state = false;
+            datum v_len : whole = length(v);
+            datum vi : whole = 0;
+            cycle (vi < v_len) do
+                 datum ch : series = substring(v, vi, 1);
+                 datum is_float_char : state = false;
+                 verify (ch == ".") then is_float_char = true; conclude
+                 verify (ch == "e") then is_float_char = true; conclude
+                 verify (is_float_char) then has_dot = true; conclude
+                 vi = vi + 1;
+            conclude
+            verify (has_dot == false) then v = v + ".0"; conclude
+            result v;
+        conclude
+        result node.text_val;
+    conclude
+
+    verify (k == NODE_IDENTIFIER) then
+        datum tmp : series = next_tmp();
+        datum var_type : series = get_expr_type(node_idx);
+        emit("    " + tmp + " = load " + var_type + ", " + var_type + "* %" + node.text_val);
+        result tmp;
+    conclude
+
+    verify (k == NODE_BINARY_OP) then
+        datum op : series = node.op;
+        datum left : series = gen_expression(node.left);
+        datum right : series = gen_expression(node.right);
+        datum l_type : series = get_expr_type(node.left);
+        datum r_type : series = get_expr_type(node.right);
+        datum tmp : series = next_tmp();
+
+        // Handling implicit type casting
+        verify (l_type == "i64" and r_type == "double") then
+            datum cast_left : series = next_tmp();
+            emit("    " + cast_left + " = sitofp i64 " + left + " to double");
+            left = cast_left;
+            l_type = "double";
+        conclude
+        verify (l_type == "double" and r_type == "i64") then
+            datum cast_right : series = next_tmp();
+            emit("    " + cast_right + " = sitofp i64 " + right + " to double");
+            right = cast_right;
+            r_type = "double";
+        conclude
+
+        // Math operations
+        verify (l_type == "double") then
+            verify (op == "+") then emit("    " + tmp + " = fadd double " + left + ", " + right); conclude
+            verify (op == "-") then emit("    " + tmp + " = fsub double " + left + ", " + right); conclude
+            verify (op == "*") then emit("    " + tmp + " = fmul double " + left + ", " + right); conclude
+            verify (op == "/") then emit("    " + tmp + " = fdiv double " + left + ", " + right); conclude
+
+            verify (op == ">") then emit("    " + tmp + " = fcmp ogt double " + left + ", " + right); conclude
+            verify (op == "<") then emit("    " + tmp + " = fcmp olt double " + left + ", " + right); conclude
+            verify (op == ">=") then emit("    " + tmp + " = fcmp oge double " + left + ", " + right); conclude
+            verify (op == "<=") then emit("    " + tmp + " = fcmp ole double " + left + ", " + right); conclude
+            verify (op == "==") then emit("    " + tmp + " = fcmp oeq double " + left + ", " + right); conclude
+            verify (op == "!=") then emit("    " + tmp + " = fcmp one double " + left + ", " + right); conclude
+        conclude
+
+        verify (l_type == "i8*") then
+            // String concat logic: use external string concat func (TODO)
+            verify (op == "+") then
+                emit("    " + tmp + " = call i8* @__str_concat(i8* " + left + ", i8* " + right + ")");
+            conclude
+            verify (op == "==") then
+                // strcmp
+                datum cmp_tmp : series = next_tmp();
+                emit("    " + cmp_tmp + " = call i32 @strcmp(i8* " + left + ", i8* " + right + ")");
+                emit("    " + tmp + " = icmp eq i32 " + cmp_tmp + ", 0");
+            conclude
+            verify (op == "!=") then
+                // strcmp
+                datum cmp_tmp : series = next_tmp();
+                emit("    " + cmp_tmp + " = call i32 @strcmp(i8* " + left + ", i8* " + right + ")");
+                emit("    " + tmp + " = icmp ne i32 " + cmp_tmp + ", 0");
+            conclude
+        conclude
+
+        datum is_int_op : state = false;
+        verify (l_type != "double") then
+            verify (l_type != "i8*") then
+                is_int_op = true;
+            conclude
+        conclude
+
+        verify (is_int_op) then
+            // Assume i64 or i1
+            verify (op == "+") then emit("    " + tmp + " = add i64 " + left + ", " + right); conclude
+            verify (op == "-") then emit("    " + tmp + " = sub i64 " + left + ", " + right); conclude
+            verify (op == "*") then emit("    " + tmp + " = mul i64 " + left + ", " + right); conclude
+            verify (op == "/") then emit("    " + tmp + " = sdiv i64 " + left + ", " + right); conclude
+
+            verify (op == "and") then emit("    " + tmp + " = and i1 " + left + ", " + right); conclude
+            verify (op == "or") then emit("    " + tmp + " = or i1 " + left + ", " + right); conclude
+
+            verify (op == ">") then emit("    " + tmp + " = icmp sgt i64 " + left + ", " + right); conclude
+            verify (op == "<") then emit("    " + tmp + " = icmp slt i64 " + left + ", " + right); conclude
+            verify (op == ">=") then emit("    " + tmp + " = icmp sge i64 " + left + ", " + right); conclude
+            verify (op == "<=") then emit("    " + tmp + " = icmp sle i64 " + left + ", " + right); conclude
+            verify (op == "==") then emit("    " + tmp + " = icmp eq i64 " + left + ", " + right); conclude
+            verify (op == "!=") then emit("    " + tmp + " = icmp ne i64 " + left + ", " + right); conclude
+        conclude
+
+        result tmp;
+    conclude
+
+    verify (k == NODE_FUNC_CALL) then
+        datum fname : series = node.text_val;
+        datum args : sequence<whole> = node.children;
+
+        verify (fname == "reveal") then
+            datum len : whole = length(args);
+            verify (len == 0) then
+                emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str.newline, i64 0, i64 0))");
+            otherwise
+                datum arg_val : series = gen_expression(args[0]);
+                datum arg_type : series = get_expr_type(args[0]);
+
+                verify (arg_type == "i8*") then
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.fmt_str, i64 0, i64 0), i8* " + arg_val + ")");
+                conclude
+                verify (arg_type == "double") then
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.fmt_f64, i64 0, i64 0), double " + arg_val + ")");
+                conclude
+                datum is_int_arg : state = false;
+                verify (arg_type == "i64") then is_int_arg = true; conclude
+                verify (arg_type == "i1") then is_int_arg = true; conclude
+                verify (is_int_arg) then
+                    emit("    call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @.str.fmt_i64, i64 0, i64 0), i64 " + arg_val + ")");
+                conclude
+            conclude
+            result "0";
+        conclude
+
+        // Intrinsic mapping
+        verify (fname == "power") then fname = "pow"; conclude
+        verify (fname == "absolute") then fname = "abs"; conclude
+        verify (fname == "root") then fname = "sqrt"; conclude
+        verify (fname == "sine") then fname = "sin"; conclude
+        verify (fname == "cosine") then fname = "cos"; conclude
+        verify (fname == "tangent") then fname = "tan"; conclude
+        verify (fname == "to_string") then
+            datum arg_type : series = get_expr_type(args[0]);
+            verify (arg_type == "double") then fname = "__to_string_precise"; conclude
+            datum is_int_type : state = false;
+            verify (arg_type == "i64") then is_int_type = true; conclude
+            verify (arg_type == "i1") then is_int_type = true; conclude
+            verify (is_int_type) then fname = "__to_string_whole"; conclude
+        conclude
+        verify (fname == "file_write") then fname = "__file_write"; conclude
+        verify (fname == "file_read") then fname = "__file_read"; conclude
+        verify (fname == "file_remove") then fname = "remove"; conclude
+
+        datum args_str : series = "";
+        datum i : whole = 0;
+        datum arg_len : whole = length(args);
+        cycle (i < arg_len) do
+            verify (i > 0) then args_str = args_str + ", "; conclude
+            datum arg_type : series = get_expr_type(args[i]);
+            args_str = args_str + arg_type + " " + gen_expression(args[i]);
+            i = i + 1;
+        conclude
+
+        datum ret_type : series = get_expr_type(node_idx);
+        datum tmp : series = next_tmp();
+
+        verify (ret_type == "void") then
+            emit("    call void @" + fname + "(" + args_str + ")");
+            result "0";
+        otherwise
+            emit("    " + tmp + " = call " + ret_type + " @" + fname + "(" + args_str + ")");
+            result tmp;
+        conclude
+    conclude
+
+    result "0";
+end
+
+algorithm visit_stmt(node_idx : whole) -> void
+begin
+    datum node : ASTNode = node_heap[node_idx];
+    datum k : whole = node.kind;
+
+    verify (k == NODE_VAR_DECL) then
+        datum type_str : series = map_type_node(node.type_node);
+        emit("    %" + node.text_val + " = alloca " + type_str);
+
+        add_symbol(node.text_val, type_str);
+
+        verify (not (node.initializer == -1)) then
+            datum val : series = gen_expression(node.initializer);
+            emit("    store " + type_str + " " + val + ", " + type_str + "* %" + node.text_val);
+        conclude
+    conclude
+
+    verify (k == NODE_ASSIGN) then
+        datum var_type : series = get_expr_type(node_idx); // uses identifier to get type
+        datum val : series = gen_expression(node.initializer);
+        datum val_type : series = get_expr_type(node.initializer);
+
+        // Check if we need implicit cast (e.g. i64 to double)
+        verify (var_type == "double" and val_type == "i64") then
+             datum cast_tmp : series = next_tmp();
+             emit("    " + cast_tmp + " = sitofp i64 " + val + " to double");
+             val = cast_tmp;
+        conclude
+        verify (var_type == "i64" and val_type == "double") then
+             datum cast_tmp : series = next_tmp();
+             emit("    " + cast_tmp + " = fptosi double " + val + " to i64");
+             val = cast_tmp;
+        conclude
+
+        emit("    store " + var_type + " " + val + ", " + var_type + "* %" + node.text_val);
+    conclude
+
+    verify (k == NODE_EXPR_STMT) then
+        datum dummy : series = gen_expression(node.initializer);
+    conclude
+
+    verify (k == NODE_RETURN) then
+        verify (not (node.initializer == -1)) then
+            datum ret_val : series = gen_expression(node.initializer);
+            datum ret_type : series = get_expr_type(node.initializer);
+            verify (current_func_name == "main") then
+                emit("    ret i32 0");
+            otherwise
+                emit("    ret " + ret_type + " " + ret_val);
+            conclude
+        otherwise
+            emit("    ret void");
+        conclude
+    conclude
+
+    verify (k == NODE_IF) then
+        datum cond_val : series = gen_expression(node.condition);
+        datum then_label : series = next_label();
+        datum else_label : series = next_label();
+        datum end_label : series = next_label();
+
+        verify (not (node.else_branch == -1)) then
+            emit("    br i1 " + cond_val + ", label %" + then_label + ", label %" + else_label);
+            emit(then_label + ":");
+            visit_block(node.then_branch);
+            emit("    br label %" + end_label);
+
+            emit(else_label + ":");
+            visit_block(node.else_branch);
+            emit("    br label %" + end_label);
+        otherwise
+            emit("    br i1 " + cond_val + ", label %" + then_label + ", label %" + end_label);
+            emit(then_label + ":");
+            visit_block(node.then_branch);
+            emit("    br label %" + end_label);
+        conclude
+
+        emit(end_label + ":");
+    conclude
+
+    verify (k == NODE_WHILE) then
+        datum cond_label : series = next_label();
+        datum body_label : series = next_label();
+        datum end_label : series = next_label();
+
+        emit("    br label %" + cond_label);
+        emit(cond_label + ":");
+        datum cond_val : series = gen_expression(node.condition);
+        emit("    br i1 " + cond_val + ", label %" + body_label + ", label %" + end_label);
+
+        emit(body_label + ":");
+        visit_block(node.then_branch);
+        emit("    br label %" + cond_label);
+
+        emit(end_label + ":");
+    conclude
+
+    verify (k == NODE_BLOCK) then
+        visit_block(node_idx);
+    conclude
+end
+
+algorithm visit_block(node_idx : whole) -> void
+begin
+    push_scope();
+    datum blk : ASTNode = node_heap[node_idx];
+    datum i : whole = 0;
+    datum children : sequence<whole> = blk.children;
+    datum len : whole = length(children);
+    cycle (i < len) do
+        visit_stmt(children[i]);
+        i = i + 1;
+    conclude
+    pop_scope();
+end
+
+algorithm generate_code(prog_idx : whole) -> void
+begin
+    // Initial global headers
+    emit("; ModuleID = 'lors_module'");
+    emit("");
+
+    // External C standard library functions
+    emit("declare i32 @printf(i8*, ...)");
+    emit("declare i8* @malloc(i64)");
+    emit("declare void @free(i8*)");
+    emit("declare i8* @strcpy(i8*, i8*)");
+    emit("declare i8* @strcat(i8*, i8*)");
+    emit("declare i64 @strlen(i8*)");
+    emit("declare i32 @strcmp(i8*, i8*)");
+    emit("declare i32 @sprintf(i8*, i8*, ...)");
+    emit("declare i8* @fopen(i8*, i8*)");
+    emit("declare i64 @fread(i8*, i64, i64, i8*)");
+    emit("declare i64 @fwrite(i8*, i64, i64, i8*)");
+    emit("declare i32 @fclose(i8*)");
+    emit("declare i32 @fseek(i8*, i64, i32)");
+    emit("declare i64 @ftell(i8*)");
+    emit("declare i32 @remove(i8*)");
+
+    // Math functions
+    emit("declare double @pow(double, double)");
+    emit("declare double @sqrt(double)");
+    emit("declare double @sin(double)");
+    emit("declare double @cos(double)");
+    emit("declare double @tan(double)");
+    emit("declare double @abs(double)");
+    emit("");
+
+    // Global strings for formats
+    emit_global("@.str.newline = private unnamed_addr constant [2 x i8] c\"\\0A\\00\", align 1");
+    emit_global("@.str.fmt_i64 = private unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\", align 1");
+    emit_global("@.str.fmt_f64 = private unnamed_addr constant [4 x i8] c\"%f\\0A\\00\", align 1");
+    emit_global("@.str.fmt_str = private unnamed_addr constant [4 x i8] c\"%s\\0A\\00\", align 1");
+    emit_global("@.str.read_mode = private unnamed_addr constant [3 x i8] c\"rb\\00\", align 1");
+    emit_global("@.str.write_mode = private unnamed_addr constant [3 x i8] c\"wb\\00\", align 1");
+    emit_global("@.str.sprintf_i64 = private unnamed_addr constant [5 x i8] c\"%lld\\00\", align 1");
+    emit_global("@.str.sprintf_f64 = private unnamed_addr constant [3 x i8] c\"%f\\00\", align 1");
+
+    // Standard Library Implementation
+    emit("define i8* @__str_concat(i8* %s1, i8* %s2) {");
+    emit("entry:");
+    emit("    %len1 = call i64 @strlen(i8* %s1)");
+    emit("    %len2 = call i64 @strlen(i8* %s2)");
+    emit("    %total_len = add i64 %len1, %len2");
+    emit("    %total_size = add i64 %total_len, 1");
+    emit("    %mem = call i8* @malloc(i64 %total_size)");
+    emit("    call i8* @strcpy(i8* %mem, i8* %s1)");
+    emit("    call i8* @strcat(i8* %mem, i8* %s2)");
+    emit("    ret i8* %mem");
+    emit("}");
+
+    emit("define i8* @__to_string_whole(i64 %val) {");
+    emit("entry:");
+    emit("    %mem = call i8* @malloc(i64 32)"); // Max i64 string length is ~20 chars + null
+    emit("    call i32 (i8*, i8*, ...) @sprintf(i8* %mem, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.sprintf_i64, i64 0, i64 0), i64 %val)");
+    emit("    ret i8* %mem");
+    emit("}");
+
+    emit("define i8* @__to_string_precise(double %val) {");
+    emit("entry:");
+    emit("    %mem = call i8* @malloc(i64 64)");
+    emit("    call i32 (i8*, i8*, ...) @sprintf(i8* %mem, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.sprintf_f64, i64 0, i64 0), double %val)");
+    emit("    ret i8* %mem");
+    emit("}");
+
+    // File read
+    emit("define i8* @__file_read(i8* %path) {");
+    emit("entry:");
+    emit("    %fp = call i8* @fopen(i8* %path, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.read_mode, i64 0, i64 0))");
+    emit("    %isnull = icmp eq i8* %fp, null");
+    emit("    br i1 %isnull, label %error, label %ok");
+    emit("ok:");
+    emit("    call i32 @fseek(i8* %fp, i64 0, i32 2)"); // SEEK_END = 2
+    emit("    %size = call i64 @ftell(i8* %fp)");
+    emit("    call i32 @fseek(i8* %fp, i64 0, i32 0)"); // SEEK_SET = 0
+    emit("    %sz_plus = add i64 %size, 1");
+    emit("    %buf = call i8* @malloc(i64 %sz_plus)");
+    emit("    call i64 @fread(i8* %buf, i64 1, i64 %size, i8* %fp)");
+    emit("    call i32 @fclose(i8* %fp)");
+    emit("    %end_ptr = getelementptr inbounds i8, i8* %buf, i64 %size");
+    emit("    store i8 0, i8* %end_ptr");
+    emit("    ret i8* %buf");
+    emit("error:");
+    emit("    %errbuf = call i8* @malloc(i64 1)");
+    emit("    store i8 0, i8* %errbuf");
+    emit("    ret i8* %errbuf");
+    emit("}");
+
+    // File write
+    emit("define void @__file_write(i8* %path, i8* %content) {");
+    emit("entry:");
+    emit("    %fp = call i8* @fopen(i8* %path, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.write_mode, i64 0, i64 0))");
+    emit("    %isnull = icmp eq i8* %fp, null");
+    emit("    br i1 %isnull, label %error, label %ok");
+    emit("ok:");
+    emit("    %len = call i64 @strlen(i8* %content)");
+    emit("    call i64 @fwrite(i8* %content, i64 1, i64 %len, i8* %fp)");
+    emit("    call i32 @fclose(i8* %fp)");
+    emit("    ret void");
+    emit("error:");
+    emit("    ret void");
+    emit("}");
+
+    // Pre-scan for Genesis to adjust signature and register function types
+    datum has_genesis : state = false;
+    datum i : whole = 0;
+    datum children : sequence<whole> = node_heap[prog_idx].children;
+    datum len : whole = length(children);
+    cycle (i < len) do
+        datum k : whole = node_heap[children[i]].kind;
+        verify (k == NODE_FUNC_DECL) then
+             datum fname : series = node_heap[children[i]].text_val;
+             datum rtype : series = map_type_node(node_heap[children[i]].type_node);
+             verify (fname == "genesis") then
+                  has_genesis = true;
+                  rtype = "i32";
+                  fname = "main";
+             conclude
+             add_func(fname, rtype);
+        conclude
+        i = i + 1;
+    conclude
+
+    // Emit logic
+    i = 0;
+    cycle (i < len) do
+        datum decl_idx : whole = children[i];
+        datum k : whole = node_heap[decl_idx].kind;
+
+        verify (k == NODE_FUNC_DECL) then
+            datum fname : series = node_heap[decl_idx].text_val;
+            datum rtype : series = map_type_node(node_heap[decl_idx].type_node);
+            datum params : series = "";
+
+            verify (fname == "genesis") then
+                fname = "main";
+                rtype = "i32"; // Return int from main
+                params = "i32 %argc, i8** %argv";
+            otherwise
+                datum j : whole = 0;
+                datum fchildren : sequence<whole> = node_heap[decl_idx].children;
+                datum plen : whole = length(fchildren);
+                cycle (j < plen) do
+                    verify (j > 0) then params = params + ", "; conclude
+                    datum pidx : whole = fchildren[j];
+                    params = params + map_type_node(node_heap[pidx].type_node) + " %" + node_heap[pidx].text_val;
+                    j = j + 1;
+                conclude
+            conclude
+
+            verify (not (node_heap[decl_idx].then_branch == -1)) then
+                emit("define " + rtype + " @" + fname + "(" + params + ") {");
+                emit("entry:");
+
+                current_func_name = fname;
+                push_scope();
+
+                // Allocate arguments on stack so they can be modified
+                datum j : whole = 0;
+                datum fchildren : sequence<whole> = node_heap[decl_idx].children;
+                datum plen : whole = length(fchildren);
+                verify (fname != "main") then
+                    cycle (j < plen) do
+                        datum pidx : whole = fchildren[j];
+                        datum pname : series = node_heap[pidx].text_val;
+                        datum ptype : series = map_type_node(node_heap[pidx].type_node);
+                        emit("    %" + pname + ".addr = alloca " + ptype);
+                        emit("    store " + ptype + " %" + pname + ", " + ptype + "* %" + pname + ".addr");
+                        add_symbol(pname, ptype);
+                        j = j + 1;
+                    conclude
+                conclude
+
+                visit_block(node_heap[decl_idx].then_branch);
+                pop_scope();
+
+                verify (fname == "main") then
+                    emit("    ret i32 0");
+                otherwise
+                    verify (rtype == "void") then
+                        emit("    ret void");
+                    otherwise
+                        // Provide a default return if block is empty or missing return
+                        verify (rtype == "i64") then emit("    ret i64 0"); conclude
+                        verify (rtype == "double") then emit("    ret double 0.0"); conclude
+                        verify (rtype == "i8*") then emit("    ret i8* null"); conclude
+                        verify (rtype == "i1") then emit("    ret i1 0"); conclude
+                    conclude
+                conclude
+
+                emit("}");
+                current_func_name = "";
+            otherwise
+                emit("declare " + rtype + " @" + fname + "(" + params + ")");
+            conclude
+            emit("");
+        conclude
+        i = i + 1;
+    conclude
+
+    // Emit global variables and strings at the end
+    codegen_output = global_strings_output + character(10) + codegen_output;
+end
+algorithm garbage_collect() -> void
+begin
+    // 1. Reset AST
+    datum empty_nodes : sequence<ASTNode>;
+    node_heap = empty_nodes;
+
+    // 2. Reset Tokens
+    datum empty_tokens : sequence<Token>;
+    token_stream = empty_tokens;
+
+    // 3. Reset Lexer & Strings
+    lexer_source = "";
+    lexer_len = 0;
+    lexer_pos = 0;
+    lexer_line = 1;
+    lexer_col = 1;
+
+    // 4. Reset Parser
+    parser_pos = 0;
+    parser_len = 0;
+
+    // 5. Reset Codegen
+    codegen_output = "";
+
+
+    // Safety: Reset global pointer if possible
+    // (In C++ backend, vectors are cleared)
+end

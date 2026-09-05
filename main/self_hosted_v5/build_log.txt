@@ -1,0 +1,4 @@
+../self_compiler_s/compiler lors_compiler.lr -o
+Compiling: lors_compiler.lr
+Unexpected token in primary
+make: *** [Makefile:11: lors_compiler] Error 1

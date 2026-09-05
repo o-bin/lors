@@ -1,0 +1,130 @@
+// ==========================================
+// Lors Compiler v6 - Sequence (Array) Runtime in LLVM IR
+// ==========================================
+
+algorithm cg_emit_sequence_helpers() -> void
+begin
+    cg_emit_line("; --- Helper: __lors_seq_create ---");
+    cg_emit_line("define linkonce_odr ptr @__lors_seq_create(i64 %cap) {");
+    cg_emit_line("  %seq = call ptr @malloc(i64 24)");
+    cg_emit_line("  %cnt_ptr = getelementptr i64, ptr %seq, i64 0");
+    cg_emit_line("  store i64 0, ptr %cnt_ptr");
+    cg_emit_line("  %cap_ptr = getelementptr i64, ptr %seq, i64 1");
+    cg_emit_line("  %cap_lt = icmp slt i64 %cap, 4");
+    cg_emit_line("  %actual_cap = select i1 %cap_lt, i64 4, i64 %cap");
+    cg_emit_line("  store i64 %actual_cap, ptr %cap_ptr");
+    cg_emit_line("  %bytes = mul i64 %actual_cap, 8");
+    cg_emit_line("  %data = call ptr @malloc(i64 %bytes)");
+    cg_emit_line("  %data_ptr = getelementptr ptr, ptr %seq, i64 2");
+    cg_emit_line("  store ptr %data, ptr %data_ptr");
+    cg_emit_line("  ret ptr %seq");
+    cg_emit_line("}");
+    cg_emit_line("");
+
+    cg_emit_line("; --- Helper: __lors_seq_append ---");
+    cg_emit_line("define linkonce_odr ptr @__lors_seq_append(ptr %seq, i64 %val) {");
+    cg_emit_line("  %cnt_ptr = getelementptr i64, ptr %seq, i64 0");
+    cg_emit_line("  %cnt = load i64, ptr %cnt_ptr");
+    cg_emit_line("  %cap_ptr = getelementptr i64, ptr %seq, i64 1");
+    cg_emit_line("  %cap = load i64, ptr %cap_ptr");
+    cg_emit_line("  %full = icmp sge i64 %cnt, %cap");
+    cg_emit_line("  br i1 %full, label %grow, label %do_insert");
+    cg_emit_line("grow:");
+    cg_emit_line("  %new_cap = mul i64 %cap, 2");
+    cg_emit_line("  store i64 %new_cap, ptr %cap_ptr");
+    cg_emit_line("  %new_bytes = mul i64 %new_cap, 8");
+    cg_emit_line("  %data_ptr_old = getelementptr ptr, ptr %seq, i64 2");
+    cg_emit_line("  %data_old = load ptr, ptr %data_ptr_old");
+    cg_emit_line("  %data_new = call ptr @realloc(ptr %data_old, i64 %new_bytes)");
+    cg_emit_line("  store ptr %data_new, ptr %data_ptr_old");
+    cg_emit_line("  br label %do_insert");
+    cg_emit_line("do_insert:");
+    cg_emit_line("  %data_ptr = getelementptr ptr, ptr %seq, i64 2");
+    cg_emit_line("  %data = load ptr, ptr %data_ptr");
+    cg_emit_line("  %slot = getelementptr i64, ptr %data, i64 %cnt");
+    cg_emit_line("  store i64 %val, ptr %slot");
+    cg_emit_line("  %next_cnt = add i64 %cnt, 1");
+    cg_emit_line("  store i64 %next_cnt, ptr %cnt_ptr");
+    cg_emit_line("  ret ptr %seq");
+    cg_emit_line("}");
+    cg_emit_line("");
+
+    cg_emit_line("; --- Helper: __lors_seq_get ---");
+    cg_emit_line("define linkonce_odr i64 @__lors_seq_get(ptr %seq, i64 %idx) {");
+    cg_emit_line("  %data_ptr = getelementptr ptr, ptr %seq, i64 2");
+    cg_emit_line("  %data = load ptr, ptr %data_ptr");
+    cg_emit_line("  %slot = getelementptr i64, ptr %data, i64 %idx");
+    cg_emit_line("  %val = load i64, ptr %slot");
+    cg_emit_line("  ret i64 %val");
+    cg_emit_line("}");
+    cg_emit_line("");
+
+    cg_emit_line("; --- Helper: __lors_seq_set ---");
+    cg_emit_line("define linkonce_odr void @__lors_seq_set(ptr %seq, i64 %idx, i64 %val) {");
+    cg_emit_line("  %data_ptr = getelementptr ptr, ptr %seq, i64 2");
+    cg_emit_line("  %data = load ptr, ptr %data_ptr");
+    cg_emit_line("  %slot = getelementptr i64, ptr %data, i64 %idx");
+    cg_emit_line("  store i64 %val, ptr %slot");
+    cg_emit_line("  ret void");
+    cg_emit_line("}");
+    cg_emit_line("");
+
+    cg_emit_line("; --- Helper: __lors_seq_len ---");
+    cg_emit_line("define linkonce_odr i64 @__lors_seq_len(ptr %seq) {");
+    cg_emit_line("  %is_null = icmp eq ptr %seq, null");
+    cg_emit_line("  br i1 %is_null, label %null_len, label %get_len");
+    cg_emit_line("null_len:");
+    cg_emit_line("  ret i64 0");
+    cg_emit_line("get_len:");
+    cg_emit_line("  %cnt_ptr = getelementptr i64, ptr %seq, i64 0");
+    cg_emit_line("  %cnt = load i64, ptr %cnt_ptr");
+    cg_emit_line("  ret i64 %cnt");
+    cg_emit_line("}");
+    cg_emit_line("");
+
+    cg_emit_line("; --- Helper: __lors_split_lines ---");
+    cg_emit_line("define linkonce_odr ptr @__lors_split_lines(ptr %str) {");
+    cg_emit_line("  %seq = call ptr @__lors_seq_create(i64 16)");
+    cg_emit_line("  %len = call i64 @strlen(ptr %str)");
+    cg_emit_line("  %start_ptr = alloca i64");
+    cg_emit_line("  %i_ptr = alloca i64");
+    cg_emit_line("  store i64 0, ptr %start_ptr");
+    cg_emit_line("  store i64 0, ptr %i_ptr");
+    cg_emit_line("  br label %sp_loop");
+    cg_emit_line("sp_loop:");
+    cg_emit_line("  %i = load i64, ptr %i_ptr");
+    cg_emit_line("  %cmp = icmp slt i64 %i, %len");
+    cg_emit_line("  br i1 %cmp, label %sp_body, label %sp_tail");
+    cg_emit_line("sp_body:");
+    cg_emit_line("  %elem = getelementptr i8, ptr %str, i64 %i");
+    cg_emit_line("  %ch = load i8, ptr %elem");
+    cg_emit_line("  %is_nl = icmp eq i8 %ch, 10");
+    cg_emit_line("  br i1 %is_nl, label %sp_emit, label %sp_next");
+    cg_emit_line("sp_emit:");
+    cg_emit_line("  %st = load i64, ptr %start_ptr");
+    cg_emit_line("  %chunk_len = sub i64 %i, %st");
+    cg_emit_line("  %line_str = call ptr @__lors_substring(ptr %str, i64 %st, i64 %chunk_len)");
+    cg_emit_line("  %line_int = ptrtoint ptr %line_str to i64");
+    cg_emit_line("  call ptr @__lors_seq_append(ptr %seq, i64 %line_int)");
+    cg_emit_line("  %next_st = add i64 %i, 1");
+    cg_emit_line("  store i64 %next_st, ptr %start_ptr");
+    cg_emit_line("  br label %sp_next");
+    cg_emit_line("sp_next:");
+    cg_emit_line("  %next_i = add i64 %i, 1");
+    cg_emit_line("  store i64 %next_i, ptr %i_ptr");
+    cg_emit_line("  br label %sp_loop");
+    cg_emit_line("sp_tail:");
+    cg_emit_line("  %st_tail = load i64, ptr %start_ptr");
+    cg_emit_line("  %rem = sub i64 %len, %st_tail");
+    cg_emit_line("  %has_rem = icmp sgt i64 %rem, 0");
+    cg_emit_line("  br i1 %has_rem, label %sp_tail_emit, label %sp_end");
+    cg_emit_line("sp_tail_emit:");
+    cg_emit_line("  %tail_str = call ptr @__lors_substring(ptr %str, i64 %st_tail, i64 %rem)");
+    cg_emit_line("  %tail_int = ptrtoint ptr %tail_str to i64");
+    cg_emit_line("  call ptr @__lors_seq_append(ptr %seq, i64 %tail_int)");
+    cg_emit_line("  br label %sp_end");
+    cg_emit_line("sp_end:");
+    cg_emit_line("  ret ptr %seq");
+    cg_emit_line("}");
+    cg_emit_line("");
+end
