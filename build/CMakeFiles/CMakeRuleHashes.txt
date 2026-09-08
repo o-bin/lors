@@ -1,0 +1,26 @@
+# Hashes of file build rules.
+7b13e369e1b8b309c295c035f9e074ad /home/zx/projects/6ls/main/lors_bootstrap
+bb04080be933139b5314a9745516a4f6 /home/zx/projects/6ls/main/self_compiler_s/stage3_compiler
+9d2b351fe63375e15c4d45c0a7d43b7c /home/zx/projects/6ls/main/self_compiler_s/stage4
+e4c1291b8c30ef1d493b9a601c128d54 /home/zx/projects/6ls/main/self_hosted_v5/lors_compiler
+2089d46847d3bbc4a90d87a5d618889a /home/zx/projects/6ls/main/twin
+e6d7f567c50ad621fb7841f84dbc54d1 /home/zx/projects/6ls/main/universal_test/test_runner
+58803e101e00b812980a84a33ff50511 /home/zx/projects/6ls/main/v6-dv/compiler
+230b1fbb07e4b176193a512c4f1e978b /home/zx/projects/6ls/main/v6-dv/compiler_dev
+8b371633d53acc56108df7b96599e38a CMakeFiles/all_stages
+c9f252e02ff75e73f6eb243f77364d66 CMakeFiles/clean_all
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage1_bootstrap
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage2_twin
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage3_compiler
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage4_self_compiled
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage5_llvm
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage6_seed
+8b371633d53acc56108df7b96599e38a CMakeFiles/stage7_modular
+6ece2497f7ac4594a0a3708626ca60b6 CMakeFiles/test_stage0
+c45569f482d3ecbd57a0e3e189cf1570 CMakeFiles/test_stage1
+09252b94366070e3a527f749baa0421d CMakeFiles/test_stage2
+fd00458da75f7560b874775d4f4c0235 CMakeFiles/test_stage3
+7b66ffc3a74f73e6e36d11107c319670 CMakeFiles/test_stage4
+20d74c5f8ce7a8757de201d7d8c6b8c2 CMakeFiles/test_stage5
+60f3d6e324d32f6a4a5cf9a22bf0641c CMakeFiles/test_stage6
+b992a90c9686df38b58f4eff90068ecf CMakeFiles/test_stage7

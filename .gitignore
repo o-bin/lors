@@ -1,0 +1,38 @@
+# ==========================================================
+# Lors Project Root .gitignore
+# ==========================================================
+
+# CMake Build Directory and Artifacts
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled Objects and LLVM Intermediate Representations
+*.o
+*.ll
+*.bc
+*.s
+*.out
+build_modular_objs/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary and Log Files
+*.tmp
+*.log
+area.txt
+array_dump.txt
+test_data.txt
+
+# Editor / IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
