@@ -36,3 +36,7 @@ test_data.txt
 *.swp
 *.swo
 *~
+
+# Temp Directories
+temp_research/
+VERIFY.md
