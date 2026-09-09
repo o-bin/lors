@@ -200,3 +200,23 @@ add_custom_target(clean_all
 
 # Master All Target
 add_custom_target(all_stages ALL DEPENDS test_stage7)
+
+# ==============================================================================
+# GLOBAL INSTALLATION (Lors compiler_dev as 'lr')
+# ==============================================================================
+add_custom_target(install_lr
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/bin"
+    COMMAND ${CMAKE_COMMAND} -E copy "${MAIN_DIR}/v6-dv/compiler_dev" "$ENV{HOME}/.local/bin/lr"
+    DEPENDS test_stage7
+    COMMENT ">>> [STAGE 7 INSTALL] Lors compiler (compiler_dev) installed successfully as 'lr'"
+    VERBATIM
+)
+
+add_dependencies(all_stages install_lr)
+
+# Standard CMake installation rule (e.g. cmake --install .)
+install(PROGRAMS "${MAIN_DIR}/v6-dv/compiler_dev"
+    DESTINATION bin
+    RENAME lr
+)
+
