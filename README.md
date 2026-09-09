@@ -20,6 +20,8 @@ Run 'lr' to verify that Lors is installed
 If you want to read the full doc, go to [Wiki English](https://github.com/o-bin/xls/wiki/Home-EN)
 
 interested in contributing? go to [CONTRIBUTE](https://github.com/o-bin/lors/blob/main/CONTRIBUTING.md)
+
+[LICENCE](https://github.com/o-bin/lors/blob/main/LICENSE)
 ...
 
 Pasos para instalar Lors guia en Español
@@ -45,3 +47,4 @@ Si quieres leer la documentacion oficial y completa de Lors, se encuentra en [Wi
 
 Estas interesado en contribuir? Para mas información [CONTRIBUTE](https://github.com/o-bin/lors/blob/main/CONTRIBUTING.md)
 
+[LICENCIA](https://github.com/o-bin/lors/blob/main/LICENSE)
