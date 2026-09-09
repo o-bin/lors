@@ -10,4 +10,4 @@ Esta sección está dedicada para guiar a los nuevos desarrolladores dispuestos 
 
 Lo primero que deberias saber es que la ultima version del codigo fuente del compilador esta alojada en /main/v6-dv/
 
-Usa Use [The book](https://github.com/o-bin/lors/tree/main/the_book) para entender la arquitectura como referencia principal.
+Usa [The book](https://github.com/o-bin/lors/tree/main/the_book) para entender la arquitectura como referencia principal.
