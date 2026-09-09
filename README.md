@@ -17,6 +17,8 @@ cmake --build .
 
 Run 'lr' to verify that Lors is installed
 
+If you want to read the full doc, go to [Wiki](https://github.com/o-bin/xls/wiki)
+
 ...
 
 Pasos para instalar Lors guia en Español
@@ -37,3 +39,5 @@ cmake --build .
 ```
 
 Usa el comando 'lr' para verificar que Lors se haya instalado. 
+
+Si quieres leer la documentacion oficial y completa de Lors, se encuentra en [Wiki](https://github.com/o-bin/xls/wiki)
